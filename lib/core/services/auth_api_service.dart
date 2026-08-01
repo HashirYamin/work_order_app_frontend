@@ -73,30 +73,66 @@ class AuthApiService {
   }
 
   Future<Map<String, dynamic>> forgotPassword({
-  required String phone,
-}) async {
-  if (ApiConfig.useFakeApi) {
-    await Future.delayed(const Duration(seconds: 1));
+    required String phone,
+  }) async {
+    if (ApiConfig.useFakeApi) {
+      await Future.delayed(const Duration(seconds: 1));
 
-    return {
-      'success': true,
-      'message': 'OTP generated for testing.',
-      'devOtp': '123456',
-    };
+      return {
+        'success': true,
+        'message': 'OTP generated for testing.',
+        'devOtp': '123456',
+      };
+    }
+
+    final response = await http.post(
+      Uri.parse(ApiConfig.forgotPassword),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'phone': phone,
+      }),
+    );
+
+    return jsonDecode(response.body);
   }
 
-  final response = await http.post(
-    Uri.parse(ApiConfig.forgotPassword),
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: jsonEncode({
-      'phone': phone,
-    }),
-  );
+  Future<Map<String, dynamic>> deleteAccount({
+    required String token,
+    required String password,
+  }) async {
+    if (ApiConfig.useFakeApi) {
+      await Future.delayed(const Duration(seconds: 1));
 
-  return jsonDecode(response.body);
-}
+      return {
+        'success': true,
+        'message': 'Your account has been permanently deleted',
+      };
+    }
+
+    final http.Response response = await http.delete(
+      Uri.parse(ApiConfig.deleteAccount),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'password': password,
+      }),
+    );
+
+    try {
+      return Map<String, dynamic>.from(
+        jsonDecode(response.body),
+      );
+    } catch (_) {
+      return {
+        'success': false,
+        'message': 'Unexpected response from the server',
+      };
+    }
+  }
 
   Future<Map<String, dynamic>> resetPassword({
     required String phone,

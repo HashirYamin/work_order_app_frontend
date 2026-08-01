@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/services/tag_preferences_service.dart';
 import '../../../core/services/user_session_service.dart';
+import '../../../core/services/auth_api_service.dart';
+
 class SettingsScreen extends StatefulWidget {
   static const routeName = '/settings';
 
@@ -14,8 +16,10 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final TagPreferencesService tagPreferencesService = TagPreferencesService();
   final UserSessionService userSessionService = UserSessionService();
+  final AuthApiService authApiService = AuthApiService();
 
   bool biometricEnabled = false;
+  bool deletingAccount = false;
   String tagPosition = TagPreferencesService.defaultPosition;
   String tagSize = TagPreferencesService.defaultSize;
 
@@ -91,6 +95,185 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> showDeleteAccountDialog() async {
+    final TextEditingController passwordController = TextEditingController();
+
+    bool obscurePassword = true;
+    bool dialogLoading = false;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (
+            BuildContext context,
+            StateSetter setDialogState,
+          ) {
+            Future<void> submitDeletion() async {
+              final String password = passwordController.text.trim();
+
+              if (password.isEmpty) {
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Please enter your password',
+                    ),
+                  ),
+                );
+                return;
+              }
+
+              setDialogState(() {
+                dialogLoading = true;
+              });
+
+              try {
+                final String? token = await userSessionService.getToken();
+
+                if (token == null || token.isEmpty) {
+                  throw Exception(
+                    'Your login session has expired. Please log in again.',
+                  );
+                }
+
+                final Map<String, dynamic> response =
+                    await authApiService.deleteAccount(
+                  token: token,
+                  password: password,
+                );
+
+                final bool success = response['success'] == true;
+
+                final String message = response['message']?.toString() ??
+                    'Unable to delete account';
+
+                if (!success) {
+                  throw Exception(message);
+                }
+
+                await userSessionService.clearSession();
+
+                if (!mounted) return;
+
+                Navigator.of(dialogContext).pop();
+
+                Navigator.pushNamedAndRemoveUntil(
+                  this.context,
+                  '/',
+                  (route) => false,
+                );
+
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  SnackBar(
+                    content: Text(message),
+                  ),
+                );
+              } catch (error) {
+                if (!mounted) return;
+
+                setDialogState(() {
+                  dialogLoading = false;
+                });
+
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      error.toString().replaceFirst('Exception: ', ''),
+                    ),
+                  ),
+                );
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Delete Account'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'This action is permanent. Your account will be deleted and you will no longer be able to log in.',
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Your submitted company work-order records may be retained for business and legal purposes.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    TextField(
+                      controller: passwordController,
+                      obscureText: obscurePassword,
+                      enabled: !dialogLoading,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        labelText: 'Current Password',
+                        prefixIcon: const Icon(Icons.lock),
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          onPressed: dialogLoading
+                              ? null
+                              : () {
+                                  setDialogState(() {
+                                    obscurePassword = !obscurePassword;
+                                  });
+                                },
+                          icon: Icon(
+                            obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                          ),
+                        ),
+                      ),
+                      onSubmitted: (_) {
+                        if (!dialogLoading) {
+                          submitDeletion();
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: dialogLoading
+                      ? null
+                      : () {
+                          Navigator.of(dialogContext).pop();
+                        },
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: dialogLoading ? null : submitDeletion,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: dialogLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Delete Permanently'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    passwordController.dispose();
+  }
+
   Future<void> logout() async {
     await userSessionService.clearSession();
 
@@ -138,35 +321,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
-
             const SizedBox(height: 18),
-
             const Text(
               'Account',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
-
             ListTile(
               title: const Text('Change Password'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () {},
             ),
-
             ListTile(
               title: const Text('Change Phone Number'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () {},
             ),
-
             const SizedBox(height: 12),
-
             const Text(
               'Photo Tag Preferences',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
-
             const SizedBox(height: 10),
-
             DropdownButtonFormField<String>(
               value: tagPosition,
               decoration: const InputDecoration(
@@ -185,9 +360,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 showSavedMessage();
               },
             ),
-
             const SizedBox(height: 14),
-
             DropdownButtonFormField<String>(
               value: tagSize,
               decoration: const InputDecoration(
@@ -206,9 +379,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 showSavedMessage();
               },
             ),
-
             const SizedBox(height: 12),
-
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -220,14 +391,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: TextStyle(fontSize: 13),
               ),
             ),
-
             const SizedBox(height: 18),
-
             const Text(
               'Preferences',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
-
             SwitchListTile(
               title: const Text('Biometric / Face'),
               value: biometricEnabled,
@@ -237,21 +405,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 });
               },
             ),
-
             const SizedBox(height: 12),
-
             const Text(
               'About',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
-
             const ListTile(
               title: Text('App Version'),
               trailing: Text('v1.0.0'),
             ),
-
             const SizedBox(height: 20),
-
             ElevatedButton.icon(
               onPressed: logout,
               icon: const Icon(Icons.logout),
@@ -262,6 +425,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 minimumSize: const Size(double.infinity, 52),
               ),
             ),
+            OutlinedButton.icon(
+              onPressed: deletingAccount ? null : showDeleteAccountDialog,
+              icon: const Icon(Icons.delete_forever),
+              label: const Text('Delete Account'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red,
+                side: const BorderSide(color: Colors.red),
+                minimumSize: const Size(
+                  double.infinity,
+                  52,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
           ],
         ),
       ),
