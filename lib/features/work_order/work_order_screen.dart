@@ -168,45 +168,46 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
       runAutoSync();
     });
   }
+
   void editSavedOrder(Map<String, dynamic> order) {
-  final String workOrderNo = order['workOrderNumber']?.toString() ?? '';
-  final String assetId = order['assetId']?.toString() ?? '';
-  final String localOrderId = order['id']?.toString() ?? '';
-  final String status = order['status']?.toString() ?? 'Pending Upload';
+    final String workOrderNo = order['workOrderNumber']?.toString() ?? '';
+    final String assetId = order['assetId']?.toString() ?? '';
+    final String localOrderId = order['id']?.toString() ?? '';
+    final String status = order['status']?.toString() ?? 'Pending Upload';
 
-  final String serverWorkOrderId =
-      order['serverWorkOrderId']?.toString() ??
-      order['server_work_order_id']?.toString() ??
-      order['serverId']?.toString() ??
-      '';
+    final String serverWorkOrderId = order['serverWorkOrderId']?.toString() ??
+        order['server_work_order_id']?.toString() ??
+        order['serverId']?.toString() ??
+        '';
 
-  if (workOrderNo.isEmpty || assetId.isEmpty || localOrderId.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Cannot edit this work order. Required data is missing.'),
+    if (workOrderNo.isEmpty || assetId.isEmpty || localOrderId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Cannot edit this work order. Required data is missing.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StageCaptureScreen(
+          workOrderNumber: workOrderNo,
+          assetId: assetId,
+          progressOnly: false,
+          editMode: true,
+          existingLocalOrderId: localOrderId,
+          existingServerWorkOrderId: serverWorkOrderId,
+          existingStatus: status,
+        ),
       ),
-    );
-    return;
+    ).then((_) {
+      loadRecentWorkOrders();
+      runAutoSync();
+    });
   }
-
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => StageCaptureScreen(
-        workOrderNumber: workOrderNo,
-        assetId: assetId,
-        progressOnly: false,
-        editMode: true,
-        existingLocalOrderId: localOrderId,
-        existingServerWorkOrderId: serverWorkOrderId,
-        existingStatus: status,
-      ),
-    ),
-  ).then((_) {
-    loadRecentWorkOrders();
-    runAutoSync();
-  });
-}
 
   Color getStatusColor(String status) {
     if (status == 'Uploaded') return Colors.green;
@@ -226,13 +227,11 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final int pendingCount = recentWorkOrders
-        .where((order) => order['status'] != 'Uploaded')
-        .length;
+    final int pendingCount =
+        recentWorkOrders.where((order) => order['status'] != 'Uploaded').length;
 
-    final int uploadedCount = recentWorkOrders
-        .where((order) => order['status'] == 'Uploaded')
-        .length;
+    final int uploadedCount =
+        recentWorkOrders.where((order) => order['status'] == 'Uploaded').length;
 
     return Scaffold(
       appBar: AppBar(
@@ -286,32 +285,24 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
                     color: Colors.blue,
                   ),
                 ),
-
                 const SizedBox(height: 18),
-
                 const Text(
                   'Enter WO number or continue',
                   style: TextStyle(color: Colors.grey),
                 ),
-
                 const SizedBox(height: 20),
-
                 AppTextField(
                   label: 'Work Order Number',
                   controller: workOrderController,
                   prefixIcon: Icons.assignment,
                 ),
-
                 const SizedBox(height: 12),
-
                 AppTextField(
                   label: 'Asset ID',
                   controller: assetIdController,
                   prefixIcon: Icons.confirmation_number,
                 ),
-
                 const SizedBox(height: 8),
-
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Progress photos only'),
@@ -325,16 +316,12 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
                     });
                   },
                 ),
-
                 const SizedBox(height: 12),
-
                 AppButton(
                   title: 'Continue',
                   onTap: continueToStages,
                 ),
-
                 const SizedBox(height: 12),
-
                 OutlinedButton(
                   onPressed: continueWithoutWorkOrder,
                   style: OutlinedButton.styleFrom(
@@ -342,7 +329,6 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
                   ),
                   child: const Text('Continue Without Work Order'),
                 ),
-
                 if (autoSyncMessage.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   Container(
@@ -383,9 +369,7 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
                     ),
                   ),
                 ],
-
                 const SizedBox(height: 28),
-
                 Row(
                   children: [
                     Expanded(
@@ -407,9 +391,7 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 24),
-
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
@@ -419,9 +401,7 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
                         ),
                   ),
                 ),
-
                 const SizedBox(height: 12),
-
                 if (loadingOrders)
                   const Padding(
                     padding: EdgeInsets.all(20),
@@ -454,8 +434,7 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
                       final String workOrderNo =
                           order['workOrderNumber'] ?? 'Unknown WO';
                       final String assetId = order['assetId'] ?? 'N/A';
-                      final String status =
-                          order['status'] ?? 'Pending Upload';
+                      final String status = order['status'] ?? 'Pending Upload';
 
                       final int photoCount =
                           localWorkOrderService.getPhotoCount(order);
@@ -476,9 +455,7 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
                                 getStatusIcon(status),
                                 color: getStatusColor(status),
                               ),
-
                               const SizedBox(width: 12),
-
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -509,24 +486,24 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
                                   ],
                                 ),
                               ),
-
                               Column(
-  children: [
-    IconButton(
-      tooltip: 'Open',
-      onPressed: () => openSavedOrder(order),
-      icon: const Icon(Icons.chevron_right),
-    ),
-    TextButton.icon(
-      onPressed: () => editSavedOrder(order),
-      icon: const Icon(Icons.add_a_photo, size: 16),
-      label: const Text(
-        'Edit',
-        style: TextStyle(fontSize: 12),
-      ),
-    ),
-  ],
-),
+                                children: [
+                                  IconButton(
+                                    tooltip: 'Open',
+                                    onPressed: () => openSavedOrder(order),
+                                    icon: const Icon(Icons.chevron_right),
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: () => editSavedOrder(order),
+                                    icon:
+                                        const Icon(Icons.add_a_photo, size: 16),
+                                    label: const Text(
+                                      'Edit',
+                                      style: TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
                         ),

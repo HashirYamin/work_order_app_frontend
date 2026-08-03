@@ -102,7 +102,8 @@ class _LoginScreenState extends State<LoginScreen> {
       final bool success = response['success'] == true;
 
       if (!success) {
-        final String message = response['message']?.toString() ?? 'Login failed';
+        final String message =
+            response['message']?.toString() ?? 'Login failed';
 
         clearPasswordAfterFailedAttempt();
 
@@ -202,7 +203,6 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             children: [
               const SizedBox(height: 45),
-
               Container(
                 height: 82,
                 width: 82,
@@ -216,9 +216,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: Colors.blue,
                 ),
               ),
-
               const SizedBox(height: 20),
-
               const Text(
                 'Work Order Flow',
                 style: TextStyle(
@@ -226,24 +224,16 @@ class _LoginScreenState extends State<LoginScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-
               const SizedBox(height: 6),
-
               const Text(
                 'Sign in to continue',
                 style: TextStyle(color: Colors.grey),
               ),
-
               const SizedBox(height: 26),
-
               qatarPhoneField(),
-
               const SizedBox(height: 14),
-
               passwordField(),
-
               const SizedBox(height: 8),
-
               Row(
                 children: [
                   Checkbox(
@@ -257,17 +247,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   const Text('Remember me'),
                 ],
               ),
-
               const SizedBox(height: 10),
-
               AppButton(
                 title: 'Login',
                 loading: loading,
                 onTap: login,
               ),
-
               const SizedBox(height: 18),
-
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [

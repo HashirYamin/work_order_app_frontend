@@ -107,10 +107,8 @@ class WorkOrderApiService {
           ),
         );
 
-        request.fields['photo_${i}_stage'] =
-            photo['stage']?.toString() ?? '';
-        request.fields['photo_${i}_time'] =
-            photo['time']?.toString() ?? '';
+        request.fields['photo_${i}_stage'] = photo['stage']?.toString() ?? '';
+        request.fields['photo_${i}_time'] = photo['time']?.toString() ?? '';
         request.fields['photo_${i}_displayTime'] =
             photo['displayTime']?.toString() ?? '';
         request.fields['photo_${i}_latitude'] =

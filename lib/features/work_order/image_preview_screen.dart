@@ -54,7 +54,6 @@ class ImagePreviewScreen extends StatelessWidget {
                 ),
               ),
             ),
-
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
@@ -75,28 +74,22 @@ class ImagePreviewScreen extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-
                   const SizedBox(height: 8),
-
                   Text(
                     'Stage: $stage',
                     style: const TextStyle(color: Colors.white70),
                   ),
-
                   Text(
                     'Time: $displayTime',
                     style: const TextStyle(color: Colors.white70),
                   ),
-
                   Text(
                     latitude.isEmpty || longitude.isEmpty
                         ? 'GPS: unavailable'
                         : 'GPS: $latitude, $longitude',
                     style: const TextStyle(color: Colors.white70),
                   ),
-
                   const SizedBox(height: 14),
-
                   if (showKeepButton)
                     Row(
                       children: [
@@ -115,9 +108,7 @@ class ImagePreviewScreen extends StatelessWidget {
                             child: const Text('Remove Photo'),
                           ),
                         ),
-
                         const SizedBox(width: 12),
-
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () {
@@ -147,9 +138,7 @@ class ImagePreviewScreen extends StatelessWidget {
                             child: const Text('Back'),
                           ),
                         ),
-
                         const SizedBox(width: 12),
-
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () {

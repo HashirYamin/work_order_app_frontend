@@ -156,40 +156,42 @@ class LocalWorkOrderService {
       errorMessage: message,
     );
   }
-Future<void> addPhotosToExistingWorkOrder({
-  required String id,
-  required List<Map<String, String>> newPhotos,
-  String status = 'Uploaded',
-  bool isSynced = true,
-}) async {
-  final SharedPreferences prefs = await SharedPreferences.getInstance();
-  final String storageKey = await _getStorageKey();
 
-  final List<Map<String, dynamic>> orders = await getWorkOrders();
+  Future<void> addPhotosToExistingWorkOrder({
+    required String id,
+    required List<Map<String, String>> newPhotos,
+    String status = 'Uploaded',
+    bool isSynced = true,
+  }) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String storageKey = await _getStorageKey();
 
-  final int index = orders.indexWhere((order) => order['id'] == id);
+    final List<Map<String, dynamic>> orders = await getWorkOrders();
 
-  if (index == -1) {
-    return;
+    final int index = orders.indexWhere((order) => order['id'] == id);
+
+    if (index == -1) {
+      return;
+    }
+
+    final List<dynamic> existingPhotos = orders[index]['photos'] ?? [];
+
+    orders[index]['photos'] = [
+      ...existingPhotos,
+      ...newPhotos,
+    ];
+
+    orders[index]['status'] = status;
+    orders[index]['isSynced'] = isSynced;
+    orders[index]['lastEditedAt'] = DateTime.now().toIso8601String();
+
+    final List<String> encodedOrders = orders.map((order) {
+      return jsonEncode(order);
+    }).toList();
+
+    await prefs.setStringList(storageKey, encodedOrders);
   }
 
-  final List<dynamic> existingPhotos = orders[index]['photos'] ?? [];
-
-  orders[index]['photos'] = [
-    ...existingPhotos,
-    ...newPhotos,
-  ];
-
-  orders[index]['status'] = status;
-  orders[index]['isSynced'] = isSynced;
-  orders[index]['lastEditedAt'] = DateTime.now().toIso8601String();
-
-  final List<String> encodedOrders = orders.map((order) {
-    return jsonEncode(order);
-  }).toList();
-
-  await prefs.setStringList(storageKey, encodedOrders);
-}
   int getPhotoCount(Map<String, dynamic> order) {
     final List<dynamic> photos = order['photos'] ?? [];
     return photos.length;

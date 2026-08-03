@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
+import '../../core/services/firebase_phone_auth_service.dart';
+import '../../shared/widgets/phone_otp_dialog.dart';
 import '../../core/services/auth_api_service.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_text_field.dart';
@@ -16,7 +17,7 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final AuthApiService authApiService = AuthApiService();
-
+  final FirebasePhoneAuthService phoneAuthService = FirebasePhoneAuthService();
   final fullNameController = TextEditingController();
   final qidController = TextEditingController();
   final jobTitleController = TextEditingController();
@@ -40,7 +41,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   bool isValidQatarPhone(String phone) {
-    return RegExp(r'^\d{8}$').hasMatch(phone.trim());
+    return RegExp(r'^[3567]\d{7}$').hasMatch(phone.trim());
   }
 
   String? validatePassword(String password) {
@@ -80,15 +81,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
         password.isEmpty ||
         confirmPassword.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill required fields')),
+        const SnackBar(
+          content: Text('Please fill required fields'),
+        ),
       );
       return;
     }
 
-    if (!RegExp(r'^\d{8}$').hasMatch(phone)) {
+    if (!isValidQatarPhone(phone)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter a valid 8-digit Qatar phone number.'),
+          content: Text(
+            'Enter a valid 8-digit Qatar mobile number',
+          ),
         ),
       );
       return;
@@ -105,7 +110,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (password != confirmPassword) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password and confirm password must match')),
+        const SnackBar(
+          content: Text(
+            'Password and confirm password must match',
+          ),
+        ),
       );
       return;
     }
@@ -115,36 +124,50 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      final Map<String, dynamic> response = await authApiService.register(
+      final String? firebaseIdToken = await showPhoneOtpDialog(
+        context: context,
+        phone: phone,
+        phoneAuthService: phoneAuthService,
+      );
+
+      if (firebaseIdToken == null) {
+        return;
+      }
+
+      final Map<String, dynamic> response =
+          await authApiService.registerWithPhone(
         fullName: fullName,
         qidNumber: qidNumber,
         jobTitle: jobTitle,
         phone: phone,
         password: password,
+        firebaseIdToken: firebaseIdToken,
       );
 
       final bool success = response['success'] == true;
 
       if (!success) {
-        throw Exception(response['message'] ?? 'Registration failed');
+        throw Exception(
+          response['message'] ?? 'Registration failed',
+        );
       }
 
       if (!mounted) return;
 
-      showDialog(
+      final String successMessage = response['message']?.toString() ??
+          'Phone verified and registration completed';
+
+      await showDialog<void>(
         context: context,
         barrierDismissible: false,
-        builder: (context) {
+        builder: (BuildContext dialogContext) {
           return AlertDialog(
             title: const Text('Registration Submitted'),
-            content: const Text(
-              'The Registration is submitted succesfully, Please wait for Administrator approval',
-            ),
+            content: Text(successMessage),
             actions: [
               TextButton(
                 onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.pop(context);
+                  Navigator.of(dialogContext).pop();
                 },
                 child: const Text('OK'),
               ),
@@ -152,13 +175,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
           );
         },
       );
+
+      if (!mounted) return;
+
+      Navigator.of(context).pop();
     } catch (error) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString().replaceAll('Exception: ', ''))),
+        SnackBar(
+          content: Text(
+            error.toString().replaceFirst('Exception: ', ''),
+          ),
+        ),
       );
     } finally {
+      await phoneAuthService.signOut();
+
       if (mounted) {
         setState(() {
           loading = false;
@@ -249,55 +282,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 'Fill in your details below',
                 style: TextStyle(fontSize: 16),
               ),
-
               const SizedBox(height: 20),
-
               AppTextField(
                 label: 'Full Name',
                 controller: fullNameController,
                 prefixIcon: Icons.person,
               ),
-
               const SizedBox(height: 12),
-
               AppTextField(
                 label: 'QID Number',
                 controller: qidController,
                 prefixIcon: Icons.badge,
               ),
-
               const SizedBox(height: 12),
-
               AppTextField(
                 label: 'Job Title / Designation',
                 controller: jobTitleController,
                 prefixIcon: Icons.work,
               ),
-
               const SizedBox(height: 12),
-
               qatarPhoneField(),
-
               const SizedBox(height: 12),
-
               passwordField(),
-
               const SizedBox(height: 12),
-
               confirmPasswordField(),
-
               const SizedBox(height: 12),
-
               const Text(
                 'Password must contain uppercase, lowercase, number, special character and minimum 8 characters.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
-
               const SizedBox(height: 22),
-
               AppButton(
-                title: 'Submit Registration',
+                title: 'Verify Phone & Register',
                 loading: loading,
                 onTap: submitRegistration,
               ),

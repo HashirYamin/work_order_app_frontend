@@ -40,7 +40,6 @@ class _SavedWorkOrderDetailsScreenState
     }).toList();
   }
 
-  
   Future<void> fakeMarkUploaded() async {
     final String id = order['id'] ?? '';
 
@@ -99,17 +98,11 @@ class _SavedWorkOrderDetailsScreenState
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-
                   const SizedBox(height: 8),
-
                   Text('Asset ID: $assetId'),
-
                   const SizedBox(height: 8),
-
                   Text('Submitted At: $submittedAt'),
-
                   const SizedBox(height: 8),
-
                   Row(
                     children: [
                       Icon(
@@ -126,7 +119,6 @@ class _SavedWorkOrderDetailsScreenState
                       ),
                     ],
                   ),
-
                   if (notes.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Text('Notes: $notes'),
@@ -134,9 +126,7 @@ class _SavedWorkOrderDetailsScreenState
                 ],
               ),
             ),
-
             const SizedBox(height: 18),
-
             Text(
               'Saved Photos (${photos.length})',
               style: const TextStyle(
@@ -144,9 +134,7 @@ class _SavedWorkOrderDetailsScreenState
                 fontWeight: FontWeight.bold,
               ),
             ),
-
             const SizedBox(height: 12),
-
             GridView.builder(
               itemCount: photos.length,
               shrinkWrap: true,
@@ -215,9 +203,7 @@ class _SavedWorkOrderDetailsScreenState
                 );
               },
             ),
-
             const SizedBox(height: 24),
-
             ElevatedButton.icon(
               onPressed: fakeMarkUploaded,
               icon: const Icon(Icons.cloud_done),
@@ -226,10 +212,7 @@ class _SavedWorkOrderDetailsScreenState
                 minimumSize: const Size(double.infinity, 52),
               ),
             ),
-
             const SizedBox(height: 12),
-
-            
           ],
         ),
       ),

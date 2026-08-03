@@ -45,44 +45,44 @@ class _UploadQueueScreenState extends State<UploadQueueScreen> {
   }
 
   Future<void> syncSingleOrder(Map<String, dynamic> order) async {
-  final bool success = await syncService.syncSingleWorkOrder(order);
+    final bool success = await syncService.syncSingleWorkOrder(order);
 
-  await loadQueue();
+    await loadQueue();
 
-  if (!mounted) return;
+    if (!mounted) return;
 
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-        success
-            ? '${order['workOrderNumber']} uploaded successfully'
-            : '${order['workOrderNumber']} upload failed',
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? '${order['workOrderNumber']} uploaded successfully'
+              : '${order['workOrderNumber']} upload failed',
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Future<void> syncAllPending() async {
-  setState(() {
-    syncingAll = true;
-  });
+    setState(() {
+      syncingAll = true;
+    });
 
-  final int uploadedCount = await syncService.syncAllPendingWorkOrders();
+    final int uploadedCount = await syncService.syncAllPendingWorkOrders();
 
-  await loadQueue();
+    await loadQueue();
 
-  if (!mounted) return;
+    if (!mounted) return;
 
-  setState(() {
-    syncingAll = false;
-  });
+    setState(() {
+      syncingAll = false;
+    });
 
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text('$uploadedCount pending work orders uploaded'),
-    ),
-  );
-}
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$uploadedCount pending work orders uploaded'),
+      ),
+    );
+  }
 
   int get pendingCount {
     return orders.where((order) => order['status'] != 'Uploaded').length;
@@ -156,9 +156,7 @@ class _UploadQueueScreenState extends State<UploadQueueScreen> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 18),
-
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
@@ -170,13 +168,10 @@ class _UploadQueueScreenState extends State<UploadQueueScreen> {
                   style: TextStyle(fontSize: 13),
                 ),
               ),
-
               const SizedBox(height: 18),
-
               ElevatedButton.icon(
-                onPressed: pendingOrders.isEmpty || syncingAll
-                    ? null
-                    : syncAllPending,
+                onPressed:
+                    pendingOrders.isEmpty || syncingAll ? null : syncAllPending,
                 icon: syncingAll
                     ? const SizedBox(
                         height: 18,
@@ -191,9 +186,7 @@ class _UploadQueueScreenState extends State<UploadQueueScreen> {
                   minimumSize: const Size(double.infinity, 52),
                 ),
               ),
-
               const SizedBox(height: 22),
-
               const Text(
                 'Pending Uploads',
                 style: TextStyle(
@@ -201,9 +194,7 @@ class _UploadQueueScreenState extends State<UploadQueueScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-
               const SizedBox(height: 12),
-
               if (loading)
                 const Center(
                   child: Padding(
@@ -234,8 +225,7 @@ class _UploadQueueScreenState extends State<UploadQueueScreen> {
                   itemBuilder: (context, index) {
                     final Map<String, dynamic> order = pendingOrders[index];
 
-                    final String status =
-                        order['status'] ?? 'Pending Upload';
+                    final String status = order['status'] ?? 'Pending Upload';
 
                     final String workOrderNo =
                         order['workOrderNumber'] ?? 'Unknown WO';
@@ -258,9 +248,7 @@ class _UploadQueueScreenState extends State<UploadQueueScreen> {
                             getStatusIcon(status),
                             color: getStatusColor(status),
                           ),
-
                           const SizedBox(width: 12),
-
                           Expanded(
                             child: InkWell(
                               onTap: () => openDetails(order),
@@ -294,7 +282,6 @@ class _UploadQueueScreenState extends State<UploadQueueScreen> {
                               ),
                             ),
                           ),
-
                           TextButton(
                             onPressed: status == 'Uploading'
                                 ? null
