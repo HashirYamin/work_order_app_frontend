@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/services/auth_api_service.dart';
 import '../../../core/services/tag_preferences_service.dart';
 import '../../../core/services/user_session_service.dart';
-import '../../../core/services/auth_api_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   static const routeName = '/settings';
@@ -14,17 +15,21 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final TagPreferencesService tagPreferencesService = TagPreferencesService();
-  final UserSessionService userSessionService = UserSessionService();
+  final TagPreferencesService tagPreferencesService =
+      TagPreferencesService();
+
+  final UserSessionService userSessionService =
+      UserSessionService();
+
   final AuthApiService authApiService = AuthApiService();
 
-  bool biometricEnabled = false;
   bool deletingAccount = false;
+
   String tagPosition = TagPreferencesService.defaultPosition;
   String tagSize = TagPreferencesService.defaultSize;
 
   String userName = 'Technician User';
-  String userPhone = '+0000000000';
+  String userPhone = '';
 
   final List<String> positions = [
     'Top Left',
@@ -47,21 +52,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> loadUser() async {
-    final Map<String, dynamic>? user = await userSessionService.getUser();
+    final Map<String, dynamic>? user =
+        await userSessionService.getUser();
 
-    if (!mounted) return;
-
-    if (user == null) return;
+    if (!mounted || user == null) return;
 
     setState(() {
-      userName = user['name']?.toString() ?? 'Technician User';
-      userPhone = user['phone']?.toString() ?? '+0000000000';
+      userName =
+          user['full_name']?.toString() ??
+          user['name']?.toString() ??
+          'Technician User';
+
+      userPhone = user['phone']?.toString() ?? '';
     });
   }
 
   Future<void> loadPreferences() async {
-    final savedPosition = await tagPreferencesService.getTagPosition();
-    final savedSize = await tagPreferencesService.getTagSize();
+    final String savedPosition =
+        await tagPreferencesService.getTagPosition();
+
+    final String savedSize =
+        await tagPreferencesService.getTagSize();
 
     if (!mounted) return;
 
@@ -77,6 +88,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     await tagPreferencesService.saveTagPosition(value);
+
+    showSavedMessage();
   }
 
   Future<void> updateTagSize(String value) async {
@@ -85,9 +98,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     await tagPreferencesService.saveTagSize(value);
+
+    showSavedMessage();
   }
 
   void showSavedMessage() {
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Photo tag preferences saved'),
@@ -95,8 +112,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  String get formattedPhone {
+    final String phone = userPhone.trim();
+
+    if (phone.isEmpty) {
+      return 'Not available';
+    }
+
+    if (phone.startsWith('+')) {
+      return phone;
+    }
+
+    if (RegExp(r'^\d{8}$').hasMatch(phone)) {
+      return '+974 $phone';
+    }
+
+    return phone;
+  }
+
+  Future<void> openPrivacyPolicy() async {
+    final Uri privacyPolicyUrl = Uri.parse(
+      'https://work-order-backend-b931.onrender.com/privacy-policy',
+    );
+
+    final bool opened = await launchUrl(
+      privacyPolicyUrl,
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to open the Privacy Policy.',
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> showDeleteAccountDialog() async {
-    final TextEditingController passwordController = TextEditingController();
+    final TextEditingController passwordController =
+        TextEditingController();
 
     bool obscurePassword = true;
     bool dialogLoading = false;
@@ -111,16 +168,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             StateSetter setDialogState,
           ) {
             Future<void> submitDeletion() async {
-              final String password = passwordController.text.trim();
+              final String password =
+                  passwordController.text.trim();
 
               if (password.isEmpty) {
                 ScaffoldMessenger.of(this.context).showSnackBar(
                   const SnackBar(
                     content: Text(
-                      'Please enter your password',
+                      'Please enter your current password.',
                     ),
                   ),
                 );
+
                 return;
               }
 
@@ -128,8 +187,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 dialogLoading = true;
               });
 
+              setState(() {
+                deletingAccount = true;
+              });
+
               try {
-                final String? token = await userSessionService.getToken();
+                final String? token =
+                    await userSessionService.getToken();
 
                 if (token == null || token.isEmpty) {
                   throw Exception(
@@ -143,9 +207,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   password: password,
                 );
 
-                final bool success = response['success'] == true;
+                final bool success =
+                    response['success'] == true;
 
-                final String message = response['message']?.toString() ??
+                final String message =
+                    response['message']?.toString() ??
                     'Unable to delete account';
 
                 if (!success) {
@@ -176,10 +242,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   dialogLoading = false;
                 });
 
+                setState(() {
+                  deletingAccount = false;
+                });
+
                 ScaffoldMessenger.of(this.context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      error.toString().replaceFirst('Exception: ', ''),
+                      error
+                          .toString()
+                          .replaceFirst(
+                            'Exception: ',
+                            '',
+                          ),
                     ),
                   ),
                 );
@@ -187,24 +262,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
             }
 
             return AlertDialog(
-              title: const Text('Delete Account'),
+              icon: const Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.red,
+                size: 42,
+              ),
+              title: const Text(
+                'Delete Account?',
+                textAlign: TextAlign.center,
+              ),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'This action is permanent. Your account will be deleted and you will no longer be able to log in.',
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Your submitted company work-order records may be retained for business and legal purposes.',
+                      'This action is permanent and cannot be undone.',
                       style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Deleting your account will permanently remove your profile, associated work orders, photos, photo location data, reports, and authentication identity.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade700,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
                     TextField(
                       controller: passwordController,
                       obscureText: obscurePassword,
@@ -212,14 +300,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       autofocus: true,
                       decoration: InputDecoration(
                         labelText: 'Current Password',
-                        prefixIcon: const Icon(Icons.lock),
-                        border: const OutlineInputBorder(),
+                        hintText:
+                            'Enter your password to confirm',
+                        prefixIcon:
+                            const Icon(Icons.lock_outline),
+                        border:
+                            const OutlineInputBorder(),
                         suffixIcon: IconButton(
                           onPressed: dialogLoading
                               ? null
                               : () {
                                   setDialogState(() {
-                                    obscurePassword = !obscurePassword;
+                                    obscurePassword =
+                                        !obscurePassword;
                                   });
                                 },
                           icon: Icon(
@@ -243,26 +336,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onPressed: dialogLoading
                       ? null
                       : () {
-                          Navigator.of(dialogContext).pop();
+                          Navigator.of(
+                            dialogContext,
+                          ).pop();
                         },
                   child: const Text('Cancel'),
                 ),
-                FilledButton(
-                  onPressed: dialogLoading ? null : submitDeletion,
+                FilledButton.icon(
+                  onPressed:
+                      dialogLoading ? null : submitDeletion,
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.red,
                     foregroundColor: Colors.white,
                   ),
-                  child: dialogLoading
+                  icon: dialogLoading
+                      ? const SizedBox.shrink()
+                      : const Icon(
+                          Icons.delete_forever,
+                        ),
+                  label: dialogLoading
                       ? const SizedBox(
-                          height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(
+                          height: 20,
+                          child:
+                              CircularProgressIndicator(
                             strokeWidth: 2,
                             color: Colors.white,
                           ),
                         )
-                      : const Text('Delete Permanently'),
+                      : const Text(
+                          'Delete Permanently',
+                        ),
                 ),
               ],
             );
@@ -272,6 +376,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     passwordController.dispose();
+
+    if (mounted) {
+      setState(() {
+        deletingAccount = false;
+      });
+    }
   }
 
   Future<void> logout() async {
@@ -286,159 +396,370 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget sectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(
+        left: 4,
+        bottom: 8,
+      ),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: Colors.grey.shade700,
+        ),
+      ),
+    );
+  }
+
+  Widget settingsCard({
+    required List<Widget> children,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.grey.shade200,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(
+              alpha: 0.03,
+            ),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        children: children,
+      ),
+    );
+  }
+
+  Widget divider() {
+    return Divider(
+      height: 1,
+      indent: 56,
+      color: Colors.grey.shade200,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final ColorScheme colors =
+        Theme.of(context).colorScheme;
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF6F7F9),
       appBar: AppBar(
         title: const Text('Settings'),
+        centerTitle: false,
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            32,
+          ),
           children: [
+            // ---------------------------------------------
+            // USER PROFILE
+            // ---------------------------------------------
+
             Container(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade200),
+                color: colors.primary,
+                borderRadius: BorderRadius.circular(18),
               ),
-              child: Column(
+              child: Row(
                 children: [
-                  const CircleAvatar(
-                    radius: 34,
-                    child: Icon(Icons.person, size: 35),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    userName,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                  CircleAvatar(
+                    radius: 32,
+                    backgroundColor:
+                        Colors.white.withValues(
+                      alpha: 0.18,
+                    ),
+                    child: const Icon(
+                      Icons.person_outline,
+                      size: 34,
+                      color: Colors.white,
                     ),
                   ),
-                  Text('Phone: $userPhone'),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          userName,
+                          maxLines: 1,
+                          overflow:
+                              TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 19,
+                            fontWeight:
+                                FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.phone_outlined,
+                              size: 15,
+                              color: Colors.white70,
+                            ),
+                            const SizedBox(width: 5),
+                            Expanded(
+                              child: Text(
+                                formattedPhone,
+                                style:
+                                    const TextStyle(
+                                  color:
+                                      Colors.white70,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 18),
-            const Text(
-              'Account',
-              style: TextStyle(fontWeight: FontWeight.bold),
+
+            const SizedBox(height: 24),
+
+            // ---------------------------------------------
+            // PHOTO TAG PREFERENCES
+            // ---------------------------------------------
+
+            sectionTitle('PHOTO TAG PREFERENCES'),
+
+            settingsCard(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: DropdownButtonFormField<
+                      String>(
+                    value: tagPosition,
+                    decoration:
+                        const InputDecoration(
+                      labelText: 'Tag Position',
+                      prefixIcon: Icon(
+                        Icons.open_with,
+                      ),
+                      border:
+                          OutlineInputBorder(),
+                    ),
+                    items:
+                        positions.map((position) {
+                      return DropdownMenuItem(
+                        value: position,
+                        child: Text(position),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+
+                      updateTagPosition(value);
+                    },
+                  ),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.fromLTRB(
+                    16,
+                    0,
+                    16,
+                    16,
+                  ),
+                  child:
+                      DropdownButtonFormField<
+                          String>(
+                    value: tagSize,
+                    decoration:
+                        const InputDecoration(
+                      labelText: 'Tag Size',
+                      prefixIcon:
+                          Icon(Icons.text_fields),
+                      border:
+                          OutlineInputBorder(),
+                    ),
+                    items: sizes.map((size) {
+                      return DropdownMenuItem(
+                        value: size,
+                        child: Text(size),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+
+                      updateTagSize(value);
+                    },
+                  ),
+                ),
+                Container(
+                  width: double.infinity,
+                  margin:
+                      const EdgeInsets.fromLTRB(
+                    16,
+                    0,
+                    16,
+                    16,
+                  ),
+                  padding:
+                      const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: colors.primaryContainer
+                        .withValues(alpha: 0.35),
+                    borderRadius:
+                        BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 19,
+                        color: colors.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'These settings control the position and size of the metadata tag added to captured work-order photos.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            ListTile(
-              title: const Text('Change Password'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {},
+
+            const SizedBox(height: 24),
+
+            // ---------------------------------------------
+            // PRIVACY & INFORMATION
+            // ---------------------------------------------
+
+            sectionTitle('PRIVACY & INFORMATION'),
+
+            settingsCard(
+              children: [
+                ListTile(
+                  leading: Icon(
+                    Icons.privacy_tip_outlined,
+                    color: colors.primary,
+                  ),
+                  title:
+                      const Text('Privacy Policy'),
+                  subtitle: const Text(
+                    'Learn how your personal information is handled',
+                  ),
+                  trailing:
+                      const Icon(Icons.open_in_new),
+                  onTap: openPrivacyPolicy,
+                ),
+                divider(),
+                const ListTile(
+                  leading: Icon(
+                    Icons.info_outline,
+                  ),
+                  title: Text('App Version'),
+                  trailing: Text(
+                    '1.0.0',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            ListTile(
-              title: const Text('Change Phone Number'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {},
+
+            const SizedBox(height: 24),
+
+            // ---------------------------------------------
+            // ACCOUNT
+            // ---------------------------------------------
+
+            sectionTitle('ACCOUNT'),
+
+            settingsCard(
+              children: [
+                ListTile(
+                  leading: const Icon(
+                    Icons.logout,
+                  ),
+                  title: const Text('Log Out'),
+                  subtitle: const Text(
+                    'Sign out from this device',
+                  ),
+                  trailing:
+                      const Icon(Icons.chevron_right),
+                  onTap: logout,
+                ),
+                divider(),
+                ListTile(
+                  leading: const Icon(
+                    Icons.delete_forever_outlined,
+                    color: Colors.red,
+                  ),
+                  title: const Text(
+                    'Delete Account',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Permanently delete your account and associated data',
+                  ),
+                  trailing: deletingAccount
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child:
+                              CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.chevron_right,
+                          color: Colors.red,
+                        ),
+                  onTap: deletingAccount
+                      ? null
+                      : showDeleteAccountDialog,
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            const Text(
-              'Photo Tag Preferences',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              value: tagPosition,
-              decoration: const InputDecoration(
-                labelText: 'Tag Position',
-                border: OutlineInputBorder(),
-              ),
-              items: positions.map((position) {
-                return DropdownMenuItem(
-                  value: position,
-                  child: Text(position),
-                );
-              }).toList(),
-              onChanged: (value) async {
-                if (value == null) return;
-                await updateTagPosition(value);
-                showSavedMessage();
-              },
-            ),
-            const SizedBox(height: 14),
-            DropdownButtonFormField<String>(
-              value: tagSize,
-              decoration: const InputDecoration(
-                labelText: 'Tag Size',
-                border: OutlineInputBorder(),
-              ),
-              items: sizes.map((size) {
-                return DropdownMenuItem(
-                  value: size,
-                  child: Text(size),
-                );
-              }).toList(),
-              onChanged: (value) async {
-                if (value == null) return;
-                await updateTagSize(value);
-                showSavedMessage();
-              },
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Text(
-                'These settings control where the metadata tag appears on captured photos and how large the tag text will be.',
-                style: TextStyle(fontSize: 13),
-              ),
-            ),
-            const SizedBox(height: 18),
-            const Text(
-              'Preferences',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            SwitchListTile(
-              title: const Text('Biometric / Face'),
-              value: biometricEnabled,
-              onChanged: (value) {
-                setState(() {
-                  biometricEnabled = value;
-                });
-              },
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'About',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const ListTile(
-              title: Text('App Version'),
-              trailing: Text('v1.0.0'),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: logout,
-              icon: const Icon(Icons.logout),
-              label: const Text('Logout'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade50,
-                foregroundColor: Colors.red,
-                minimumSize: const Size(double.infinity, 52),
-              ),
-            ),
-            OutlinedButton.icon(
-              onPressed: deletingAccount ? null : showDeleteAccountDialog,
-              icon: const Icon(Icons.delete_forever),
-              label: const Text('Delete Account'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red,
-                side: const BorderSide(color: Colors.red),
-                minimumSize: const Size(
-                  double.infinity,
-                  52,
+
+            const SizedBox(height: 28),
+
+            Center(
+              child: Text(
+                'Work Order • Version 1.0.0',
+                style: TextStyle(
+                  color: Colors.grey.shade500,
+                  fontSize: 12,
                 ),
               ),
             ),
-            const SizedBox(height: 12),
           ],
         ),
       ),

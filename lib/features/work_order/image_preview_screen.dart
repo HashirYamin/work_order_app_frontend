@@ -19,6 +19,8 @@ class ImagePreviewScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String imagePath = photo['imagePath'] ?? '';
+    final String imageUrl = photo['url'] ?? '';
+    final bool isServerPhoto = imageUrl.isNotEmpty;
     final String stage = photo['stage'] ?? '';
     final String displayTime = photo['displayTime'] ?? '';
     final String latitude = photo['latitude'] ?? '';
@@ -39,18 +41,58 @@ class ImagePreviewScreen extends StatelessWidget {
                 child: InteractiveViewer(
                   minScale: 0.8,
                   maxScale: 4,
-                  child: Image.file(
-                    File(imagePath),
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Center(
-                        child: Text(
-                          'Image preview failed',
-                          style: TextStyle(color: Colors.white),
+                  child: isServerPhoto
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.contain,
+                          loadingBuilder: (
+                            context,
+                            child,
+                            loadingProgress,
+                          ) {
+                            if (loadingProgress == null) {
+                              return child;
+                            }
+
+                            return const Center(
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                              ),
+                            );
+                          },
+                          errorBuilder: (
+                            context,
+                            error,
+                            stackTrace,
+                          ) {
+                            return const Center(
+                              child: Text(
+                                'Unable to load server image',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                ),
+                              ),
+                            );
+                          },
+                        )
+                      : Image.file(
+                          File(imagePath),
+                          fit: BoxFit.contain,
+                          errorBuilder: (
+                            context,
+                            error,
+                            stackTrace,
+                          ) {
+                            return const Center(
+                              child: Text(
+                                'Image preview failed',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
                 ),
               ),
             ),

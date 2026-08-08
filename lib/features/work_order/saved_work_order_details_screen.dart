@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../../core/services/work_order_api_service.dart';
 import '../../core/services/local_work_order_service.dart';
 import 'image_preview_screen.dart';
 
@@ -19,15 +19,101 @@ class SavedWorkOrderDetailsScreen extends StatefulWidget {
 class _SavedWorkOrderDetailsScreenState
     extends State<SavedWorkOrderDetailsScreen> {
   final LocalWorkOrderService localWorkOrderService = LocalWorkOrderService();
-
+  final WorkOrderApiService workOrderApiService = WorkOrderApiService();
   late Map<String, dynamic> order;
-
+  bool loadingServerDetails = false;
+  String serverLoadError = '';
   @override
   void initState() {
     super.initState();
-    order = Map<String, dynamic>.from(widget.workOrder);
-  }
 
+    order = Map<String, dynamic>.from(widget.workOrder);
+
+    if (order['source'] == 'server') {
+      loadServerWorkOrderDetails();
+    }
+  }
+Future<void> loadServerWorkOrderDetails() async {
+    final int serverWorkOrderId = int.tryParse(
+          order['serverWorkOrderId']?.toString() ?? '',
+        ) ??
+        0;
+
+    if (serverWorkOrderId <= 0) {
+      setState(() {
+        serverLoadError = 'Invalid server work order ID';
+      });
+      return;
+    }
+
+    setState(() {
+      loadingServerDetails = true;
+      serverLoadError = '';
+    });
+
+    final Map<String, dynamic> response =
+        await workOrderApiService.getWorkOrderDetails(
+      workOrderId: serverWorkOrderId,
+    );
+
+    if (!mounted) return;
+
+    if (response['success'] != true || response['data'] is! Map) {
+      setState(() {
+        loadingServerDetails = false;
+        serverLoadError = response['message']?.toString() ??
+            'Unable to load work order details';
+      });
+
+      return;
+    }
+
+    final Map<String, dynamic> serverData =
+        Map<String, dynamic>.from(response['data']);
+
+    final List<Map<String, String>> mappedPhotos = [];
+
+    final dynamic rawPhotos = serverData['photos'];
+
+    if (rawPhotos is List) {
+      for (final dynamic rawPhoto in rawPhotos) {
+        if (rawPhoto is Map) {
+          final Map<String, dynamic> photo =
+              Map<String, dynamic>.from(rawPhoto);
+
+          mappedPhotos.add({
+            'stage': photo['stage']?.toString() ?? '',
+            'displayTime': photo['display_time']?.toString() ?? '',
+            'time': photo['captured_time']?.toString() ?? '',
+            'latitude': photo['latitude']?.toString() ?? '',
+            'longitude': photo['longitude']?.toString() ?? '',
+            'imagePath': '',
+            'url': photo['url']?.toString() ?? '',
+            'source': 'server',
+          });
+        }
+      }
+    }
+
+    setState(() {
+      order = {
+        ...order,
+        'workOrderNumber': serverData['work_order_number']?.toString() ??
+            order['workOrderNumber'],
+        'assetId': serverData['asset_id']?.toString() ?? order['assetId'],
+        'notes': serverData['notes']?.toString() ?? order['notes'],
+        'submittedAt':
+            serverData['submitted_at']?.toString() ?? order['submittedAt'],
+        'serverStatus': serverData['status']?.toString() ?? '',
+        'pptStatus': serverData['ppt_status']?.toString() ?? '',
+        'photos': mappedPhotos,
+        'source': 'server',
+      };
+
+      loadingServerDetails = false;
+      serverLoadError = '';
+    });
+  }
   List<Map<String, String>> getPhotos() {
     final dynamic rawPhotos = order['photos'];
 
@@ -35,10 +121,27 @@ class _SavedWorkOrderDetailsScreenState
       return [];
     }
 
-    return rawPhotos.map((photo) {
-      return Map<String, String>.from(photo);
-    }).toList();
+    final List<Map<String, String>> photos = [];
+
+    for (final dynamic rawPhoto in rawPhotos) {
+      if (rawPhoto is Map) {
+        final Map<String, dynamic> photo = Map<String, dynamic>.from(rawPhoto);
+
+        photos.add(
+          photo.map(
+            (key, value) => MapEntry(
+              key.toString(),
+              value?.toString() ?? '',
+            ),
+          ),
+        );
+      }
+    }
+
+    return photos;
   }
+
+  
 
   Future<void> fakeMarkUploaded() async {
     final String id = order['id'] ?? '';
@@ -78,143 +181,180 @@ class _SavedWorkOrderDetailsScreenState
         title: const Text('Work Order Details'),
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(18),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    workOrderNumber,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text('Asset ID: $assetId'),
-                  const SizedBox(height: 8),
-                  Text('Submitted At: $submittedAt'),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(
-                        isUploaded ? Icons.cloud_done : Icons.cloud_upload,
-                        color: isUploaded ? Colors.green : Colors.orange,
+        child: loadingServerDetails
+            ? const Center(
+                child: CircularProgressIndicator(),
+              )
+            : serverLoadError.isNotEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.cloud_off,
+                            size: 48,
+                            color: Colors.grey,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            serverLoadError,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: loadServerWorkOrderDetails,
+                            child: const Text('Try Again'),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
+                    ),
+                  )
+                : ListView(
+                    padding: const EdgeInsets.all(18),
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              workOrderNumber,
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text('Asset ID: $assetId'),
+                            const SizedBox(height: 8),
+                            Text('Submitted At: $submittedAt'),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(
+                                  isUploaded
+                                      ? Icons.cloud_done
+                                      : Icons.cloud_upload,
+                                  color:
+                                      isUploaded ? Colors.green : Colors.orange,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  status,
+                                  style: TextStyle(
+                                    color: isUploaded
+                                        ? Colors.green
+                                        : Colors.orange,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (notes.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              Text('Notes: $notes'),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
                       Text(
-                        status,
-                        style: TextStyle(
-                          color: isUploaded ? Colors.green : Colors.orange,
+                        'Saved Photos (${photos.length})',
+                        style: const TextStyle(
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      GridView.builder(
+                        itemCount: photos.length,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 0.72,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                        ),
+                        itemBuilder: (context, index) {
+                          final Map<String, String> photo = photos[index];
+
+                          return InkWell(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ImagePreviewScreen(
+                                    photo: photo,
+                                    title: '${photo['stage']} Photo Preview',
+                                  ),
+                                ),
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(14),
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.image,
+                                    size: 42,
+                                    color: Colors.blue,
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    photo['stage'] ?? '',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    photo['displayTime'] ?? '',
+                                    maxLines: 2,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(fontSize: 11),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Tap to preview',
+                                    style: TextStyle(
+                                      color: Colors.blue,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      if (order['source'] != 'server')
+                        ElevatedButton.icon(
+                          onPressed: fakeMarkUploaded,
+                          icon: const Icon(Icons.cloud_done),
+                          label: const Text('Mark Uploaded For Testing'),
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 52),
+                          ),
+                        ),
+                      const SizedBox(height: 12),
                     ],
                   ),
-                  if (notes.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text('Notes: $notes'),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Saved Photos (${photos.length})',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
-            GridView.builder(
-              itemCount: photos.length,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 0.72,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-              ),
-              itemBuilder: (context, index) {
-                final Map<String, String> photo = photos[index];
-
-                return InkWell(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ImagePreviewScreen(
-                          photo: photo,
-                          title: '${photo['stage']} Photo Preview',
-                        ),
-                      ),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.image,
-                          size: 42,
-                          color: Colors.blue,
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          photo['stage'] ?? '',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          photo['displayTime'] ?? '',
-                          maxLines: 2,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Tap to preview',
-                          style: TextStyle(
-                            color: Colors.blue,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: fakeMarkUploaded,
-              icon: const Icon(Icons.cloud_done),
-              label: const Text('Mark Uploaded For Testing'),
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 52),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
       ),
     );
   }

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
-
+import '../../core/services/work_order_api_service.dart';
 import '../../core/services/local_work_order_service.dart';
 import '../../core/services/sync_service.dart';
 import '../../shared/widgets/app_button.dart';
@@ -25,6 +25,9 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
   final assetIdController = TextEditingController();
 
   final LocalWorkOrderService localWorkOrderService = LocalWorkOrderService();
+
+  final WorkOrderApiService workOrderApiService = WorkOrderApiService();
+
   final SyncService syncService = SyncService();
 
   StreamSubscription<List<ConnectivityResult>>? connectivitySubscription;
@@ -63,22 +66,140 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
     super.dispose();
   }
 
+  Map<String, dynamic> mapServerWorkOrder(
+    Map<String, dynamic> serverOrder,
+  ) {
+    final int serverId = int.tryParse(serverOrder['id']?.toString() ?? '') ?? 0;
+
+    final int photoCount =
+        int.tryParse(serverOrder['photo_count']?.toString() ?? '') ?? 0;
+
+    final String submittedAt =
+        serverOrder['submitted_at']?.toString().isNotEmpty == true
+            ? serverOrder['submitted_at'].toString()
+            : serverOrder['received_at']?.toString() ?? '';
+
+    return {
+      'id': 'server_$serverId',
+      'serverWorkOrderId': serverId,
+      'localId': serverOrder['local_id']?.toString() ?? '',
+      'workOrderNumber': serverOrder['work_order_number']?.toString() ?? '',
+      'assetId': serverOrder['asset_id']?.toString() ?? '',
+      'notes': serverOrder['notes']?.toString() ?? '',
+      'status': 'Uploaded',
+      'serverStatus': serverOrder['status']?.toString() ?? '',
+      'submittedAt': submittedAt,
+      'receivedAt': serverOrder['received_at']?.toString() ?? '',
+      'photoCount': photoCount,
+      'photos': <Map<String, dynamic>>[],
+      'pptStatus': serverOrder['ppt_status']?.toString() ?? 'not_generated',
+      'emailStatus': serverOrder['email_status']?.toString() ?? 'not_sent',
+      'source': 'server',
+    };
+  }
+
   Future<void> loadRecentWorkOrders() async {
-    final List<Map<String, dynamic>> orders =
-        await localWorkOrderService.getWorkOrders();
+    if (mounted) {
+      setState(() {
+        loadingOrders = true;
+      });
+    }
 
-    orders.sort((a, b) {
-      final String aDate = a['submittedAt'] ?? '';
-      final String bDate = b['submittedAt'] ?? '';
-      return bDate.compareTo(aDate);
-    });
+    try {
+      // --------------------------------------------------
+      // 1. Load work orders stored locally on this device
+      // --------------------------------------------------
 
-    if (!mounted) return;
+      final List<Map<String, dynamic>> localOrders =
+          await localWorkOrderService.getWorkOrders();
 
-    setState(() {
-      recentWorkOrders = orders;
-      loadingOrders = false;
-    });
+      // --------------------------------------------------
+      // 2. Load uploaded work orders from backend
+      // --------------------------------------------------
+
+      final Map<String, dynamic> response =
+          await workOrderApiService.getMyWorkOrders();
+
+      final List<Map<String, dynamic>> serverOrders = [];
+
+      if (response['success'] == true && response['data'] is List) {
+        final List<dynamic> rawServerOrders =
+            List<dynamic>.from(response['data']);
+
+        for (final dynamic item in rawServerOrders) {
+          if (item is Map) {
+            serverOrders.add(
+              mapServerWorkOrder(
+                Map<String, dynamic>.from(item),
+              ),
+            );
+          }
+        }
+      }
+
+      // --------------------------------------------------
+      // 3. Determine local IDs already present
+      // --------------------------------------------------
+
+      final Set<String> existingLocalIds = localOrders
+          .map((order) => order['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet();
+
+      // --------------------------------------------------
+      // 4. Merge without duplicating uploaded local orders
+      // --------------------------------------------------
+
+      final List<Map<String, dynamic>> mergedOrders = [
+        ...localOrders,
+      ];
+
+      for (final serverOrder in serverOrders) {
+        final String serverLocalId = serverOrder['localId']?.toString() ?? '';
+
+        final bool alreadyExistsLocally = serverLocalId.isNotEmpty &&
+            existingLocalIds.contains(serverLocalId);
+
+        if (!alreadyExistsLocally) {
+          mergedOrders.add(serverOrder);
+        }
+      }
+
+      // --------------------------------------------------
+      // 5. Sort newest first
+      // --------------------------------------------------
+
+      mergedOrders.sort((a, b) {
+        final String aDate = a['submittedAt']?.toString() ?? '';
+
+        final String bDate = b['submittedAt']?.toString() ?? '';
+
+        return bDate.compareTo(aDate);
+      });
+
+      if (!mounted) return;
+
+      setState(() {
+        recentWorkOrders = mergedOrders;
+        loadingOrders = false;
+      });
+    } catch (error) {
+      // Local data should still remain available if
+      // the server cannot be reached.
+      final List<Map<String, dynamic>> localOrders =
+          await localWorkOrderService.getWorkOrders();
+
+      if (!mounted) return;
+
+      setState(() {
+        recentWorkOrders = localOrders;
+        loadingOrders = false;
+      });
+
+      debugPrint(
+        'Failed to load server work orders: $error',
+      );
+    }
   }
 
   Future<void> runAutoSync() async {
@@ -436,8 +557,12 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
                       final String assetId = order['assetId'] ?? 'N/A';
                       final String status = order['status'] ?? 'Pending Upload';
 
-                      final int photoCount =
-                          localWorkOrderService.getPhotoCount(order);
+                      final int photoCount = order['source'] == 'server'
+                          ? int.tryParse(
+                                order['photoCount']?.toString() ?? '0',
+                              ) ??
+                              0
+                          : localWorkOrderService.getPhotoCount(order);
 
                       return InkWell(
                         onTap: () => openSavedOrder(order),
@@ -494,7 +619,9 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
                                     icon: const Icon(Icons.chevron_right),
                                   ),
                                   TextButton.icon(
-                                    onPressed: () => editSavedOrder(order),
+                                    onPressed: order['source'] == 'server'
+                                        ? null
+                                        : () => editSavedOrder(order),
                                     icon:
                                         const Icon(Icons.add_a_photo, size: 16),
                                     label: const Text(
