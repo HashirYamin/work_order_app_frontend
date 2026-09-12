@@ -8,7 +8,7 @@ import '../../core/services/sync_service.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_text_field.dart';
 import '../settings/screens/settings_screen.dart';
-
+import 'package:flutter/services.dart';
 import 'saved_work_order_details_screen.dart';
 import 'stage_capture_screen.dart';
 import 'upload_queue_screen.dart';
@@ -354,295 +354,306 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
     final int uploadedCount =
         recentWorkOrders.where((order) => order['status'] == 'Uploaded').length;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Work Order'),
-        actions: [
-          IconButton(
-            tooltip: 'Upload Queue',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const UploadQueueScreen(),
-                ),
-              ).then((_) {
-                loadRecentWorkOrders();
-                runAutoSync();
-              });
-            },
-            icon: const Icon(Icons.cloud_sync),
+    return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) async {
+          if (didPop) return;
+
+          await SystemNavigator.pop();
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Work Order'),
+            actions: [
+              IconButton(
+                tooltip: 'Upload Queue',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const UploadQueueScreen(),
+                    ),
+                  ).then((_) {
+                    loadRecentWorkOrders();
+                    runAutoSync();
+                  });
+                },
+                icon: const Icon(Icons.cloud_sync),
+              ),
+              IconButton(
+                tooltip: 'Settings',
+                onPressed: () {
+                  Navigator.pushNamed(context, SettingsScreen.routeName);
+                },
+                icon: const Icon(Icons.settings),
+              ),
+            ],
           ),
-          IconButton(
-            tooltip: 'Settings',
-            onPressed: () {
-              Navigator.pushNamed(context, SettingsScreen.routeName);
-            },
-            icon: const Icon(Icons.settings),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async {
-            await loadRecentWorkOrders();
-            await runAutoSync();
-          },
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(22),
-            child: Column(
-              children: [
-                Container(
-                  height: 76,
-                  width: 76,
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                  child: const Icon(
-                    Icons.work_outline,
-                    size: 40,
-                    color: Colors.blue,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                const Text(
-                  'Enter WO number or continue',
-                  style: TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 20),
-                AppTextField(
-                  label: 'Work Order Number',
-                  controller: workOrderController,
-                  prefixIcon: Icons.assignment,
-                ),
-                const SizedBox(height: 12),
-                AppTextField(
-                  label: 'Asset ID',
-                  controller: assetIdController,
-                  prefixIcon: Icons.confirmation_number,
-                ),
-                const SizedBox(height: 8),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Progress photos only'),
-                  subtitle: const Text(
-                    'Use when Before / During / After stages are not required',
-                  ),
-                  value: progressOnly,
-                  onChanged: (value) {
-                    setState(() {
-                      progressOnly = value;
-                    });
-                  },
-                ),
-                const SizedBox(height: 12),
-                AppButton(
-                  title: 'Continue',
-                  onTap: continueToStages,
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: continueWithoutWorkOrder,
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 52),
-                  ),
-                  child: const Text('Continue Without Work Order'),
-                ),
-                if (autoSyncMessage.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: autoSyncing
-                          ? Colors.blue.shade50
-                          : Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: autoSyncing
-                            ? Colors.blue.shade200
-                            : Colors.green.shade200,
+          body: SafeArea(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                await loadRecentWorkOrders();
+                await runAutoSync();
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(22),
+                child: Column(
+                  children: [
+                    Container(
+                      height: 76,
+                      width: 76,
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: const Icon(
+                        Icons.work_outline,
+                        size: 40,
+                        color: Colors.blue,
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        if (autoSyncing)
-                          const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        else
-                          const Icon(
-                            Icons.check_circle,
-                            color: Colors.green,
+                    const SizedBox(height: 18),
+                    const Text(
+                      'Enter WO number or continue',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 20),
+                    AppTextField(
+                      label: 'Work Order Number',
+                      controller: workOrderController,
+                      prefixIcon: Icons.assignment,
+                    ),
+                    const SizedBox(height: 12),
+                    AppTextField(
+                      label: 'Asset ID',
+                      controller: assetIdController,
+                      prefixIcon: Icons.confirmation_number,
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Progress photos only'),
+                      subtitle: const Text(
+                        'Use when Before / During / After stages are not required',
+                      ),
+                      value: progressOnly,
+                      onChanged: (value) {
+                        setState(() {
+                          progressOnly = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    AppButton(
+                      title: 'Continue',
+                      onTap: continueToStages,
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: continueWithoutWorkOrder,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 52),
+                      ),
+                      child: const Text('Continue Without Work Order'),
+                    ),
+                    if (autoSyncMessage.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: autoSyncing
+                              ? Colors.blue.shade50
+                              : Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: autoSyncing
+                                ? Colors.blue.shade200
+                                : Colors.green.shade200,
                           ),
-                        const SizedBox(width: 10),
+                        ),
+                        child: Row(
+                          children: [
+                            if (autoSyncing)
+                              const SizedBox(
+                                height: 18,
+                                width: 18,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            else
+                              const Icon(
+                                Icons.check_circle,
+                                color: Colors.green,
+                              ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                autoSyncMessage,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 28),
+                    Row(
+                      children: [
                         Expanded(
-                          child: Text(
-                            autoSyncMessage,
-                            style: const TextStyle(fontSize: 13),
+                          child: _DashboardCard(
+                            title: 'Pending',
+                            value: '$pendingCount',
+                            icon: Icons.cloud_upload,
+                            color: Colors.orange,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _DashboardCard(
+                            title: 'Uploaded',
+                            value: '$uploadedCount',
+                            icon: Icons.cloud_done,
+                            color: Colors.green,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
-                const SizedBox(height: 28),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _DashboardCard(
-                        title: 'Pending',
-                        value: '$pendingCount',
-                        icon: Icons.cloud_upload,
-                        color: Colors.orange,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _DashboardCard(
-                        title: 'Uploaded',
-                        value: '$uploadedCount',
-                        icon: Icons.cloud_done,
-                        color: Colors.green,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'My Recent Work Orders',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if (loadingOrders)
-                  const Padding(
-                    padding: EdgeInsets.all(20),
-                    child: CircularProgressIndicator(),
-                  )
-                else if (recentWorkOrders.isEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: const Text(
-                      'No local work orders yet. Submitted work orders will appear here.',
-                      textAlign: TextAlign.center,
-                    ),
-                  )
-                else
-                  ListView.separated(
-                    itemCount: recentWorkOrders.length,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final Map<String, dynamic> order =
-                          recentWorkOrders[index];
-
-                      final String workOrderNo =
-                          order['workOrderNumber'] ?? 'Unknown WO';
-                      final String assetId = order['assetId'] ?? 'N/A';
-                      final String status = order['status'] ?? 'Pending Upload';
-
-                      final int photoCount = order['source'] == 'server'
-                          ? int.tryParse(
-                                order['photoCount']?.toString() ?? '0',
-                              ) ??
-                              0
-                          : localWorkOrderService.getPhotoCount(order);
-
-                      return InkWell(
-                        onTap: () => openSavedOrder(order),
-                        borderRadius: BorderRadius.circular(14),
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.grey.shade200),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                getStatusIcon(status),
-                                color: getStatusColor(status),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      workOrderNo,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Asset: $assetId • $photoCount photos',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      status,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: getStatusColor(status),
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
+                    const SizedBox(height: 24),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'My Recent Work Orders',
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
                                 ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (loadingOrders)
+                      const Padding(
+                        padding: EdgeInsets.all(20),
+                        child: CircularProgressIndicator(),
+                      )
+                    else if (recentWorkOrders.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: const Text(
+                          'No local work orders yet. Submitted work orders will appear here.',
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    else
+                      ListView.separated(
+                        itemCount: recentWorkOrders.length,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final Map<String, dynamic> order =
+                              recentWorkOrders[index];
+
+                          final String workOrderNo =
+                              order['workOrderNumber'] ?? 'Unknown WO';
+                          final String assetId = order['assetId'] ?? 'N/A';
+                          final String status =
+                              order['status'] ?? 'Pending Upload';
+
+                          final int photoCount = order['source'] == 'server'
+                              ? int.tryParse(
+                                    order['photoCount']?.toString() ?? '0',
+                                  ) ??
+                                  0
+                              : localWorkOrderService.getPhotoCount(order);
+
+                          return InkWell(
+                            onTap: () => openSavedOrder(order),
+                            borderRadius: BorderRadius.circular(14),
+                            child: Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: Colors.grey.shade200),
                               ),
-                              Column(
+                              child: Row(
                                 children: [
-                                  IconButton(
-                                    tooltip: 'Open',
-                                    onPressed: () => openSavedOrder(order),
-                                    icon: const Icon(Icons.chevron_right),
+                                  Icon(
+                                    getStatusIcon(status),
+                                    color: getStatusColor(status),
                                   ),
-                                  TextButton.icon(
-                                    onPressed: order['source'] == 'server'
-                                        ? null
-                                        : () => editSavedOrder(order),
-                                    icon:
-                                        const Icon(Icons.add_a_photo, size: 16),
-                                    label: const Text(
-                                      'Edit',
-                                      style: TextStyle(fontSize: 12),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          workOrderNo,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Asset: $assetId • $photoCount photos',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          status,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: getStatusColor(status),
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
                                     ),
+                                  ),
+                                  Column(
+                                    children: [
+                                      IconButton(
+                                        tooltip: 'Open',
+                                        onPressed: () => openSavedOrder(order),
+                                        icon: const Icon(Icons.chevron_right),
+                                      ),
+                                      TextButton.icon(
+                                        onPressed: () => editSavedOrder(order),
+                                        icon: const Icon(
+                                          Icons.add_a_photo,
+                                          size: 16,
+                                        ),
+                                        label: const Text(
+                                          'Edit',
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-              ],
+                            ),
+                          );
+                        },
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
-      ),
-    );
+        ));
   }
 }
 

@@ -130,9 +130,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const WorkOrderScreen()),
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => const WorkOrderScreen(),
+        ),
+        (route) => false,
       );
     } catch (error) {
       if (!mounted) return;
