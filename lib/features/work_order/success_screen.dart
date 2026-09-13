@@ -36,9 +36,7 @@ class SuccessScreen extends StatelessWidget {
                     size: 58,
                   ),
                 ),
-
                 const SizedBox(height: 22),
-
                 const Text(
                   'Saved Successfully!',
                   style: TextStyle(
@@ -46,24 +44,16 @@ class SuccessScreen extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-
                 const SizedBox(height: 8),
-
                 Text('Work Order: $workOrderNumber'),
-
                 const SizedBox(height: 8),
-
                 Text('$photoCount files ready for upload'),
-
                 const SizedBox(height: 24),
-
                 const Text(
                   'This work order is saved locally as Pending Upload. After backend connection, it will upload automatically and PowerPoint will be generated.',
                   textAlign: TextAlign.center,
                 ),
-
                 const SizedBox(height: 30),
-
                 AppButton(
                   title: 'Create New Work Order',
                   onTap: () {

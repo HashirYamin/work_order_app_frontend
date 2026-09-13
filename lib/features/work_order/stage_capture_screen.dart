@@ -11,20 +11,19 @@ class StageCaptureScreen extends StatefulWidget {
   final String assetId;
   final bool progressOnly;
   final bool editMode;
-final String? existingLocalOrderId;
-final String? existingServerWorkOrderId;
-final String? existingStatus;
+  final String? existingLocalOrderId;
+  final String? existingServerWorkOrderId;
+  final String? existingStatus;
 
   const StageCaptureScreen({
-  super.key,
-  required this.workOrderNumber,
-  required this.assetId,
-  required this.progressOnly,
-  this.editMode = false,
-  this.existingLocalOrderId,
-  this.existingServerWorkOrderId,
-  this.existingStatus,
-    
+    super.key,
+    required this.workOrderNumber,
+    required this.assetId,
+    required this.progressOnly,
+    this.editMode = false,
+    this.existingLocalOrderId,
+    this.existingServerWorkOrderId,
+    this.existingStatus,
   });
 
   @override
@@ -66,53 +65,54 @@ class _StageCaptureScreenState extends State<StageCaptureScreen> {
     return capturedPhotos.length;
   }
 
-Future<void> capturePhoto(String stage) async {
-  if (isCapturing) return;
-
-  setState(() {
-    isCapturing = true;
-  });
-
-  try {
-    final Map<String, String>? photoData =
-        await photoCaptureService.captureAndSavePhoto(
-      workOrderNumber: widget.workOrderNumber,
-      assetId: widget.assetId,
-      stage: stage,
-    );
-
-    if (photoData == null) {
-      return;
-    }
-
-    if (!mounted) return;
+  Future<void> capturePhoto(String stage) async {
+    if (isCapturing) return;
 
     setState(() {
-      capturedPhotos.add(photoData);
+      isCapturing = true;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$stage photo added'),
-        duration: const Duration(milliseconds: 700),
-      ),
-    );
-  } catch (error) {
-    if (!mounted) return;
+    try {
+      final Map<String, String>? photoData =
+          await photoCaptureService.captureAndSavePhoto(
+        workOrderNumber: widget.workOrderNumber,
+        assetId: widget.assetId,
+        stage: stage,
+      );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Photo capture failed: $error'),
-      ),
-    );
-  } finally {
-    if (mounted) {
+      if (photoData == null) {
+        return;
+      }
+
+      if (!mounted) return;
+
       setState(() {
-        isCapturing = false;
+        capturedPhotos.add(photoData);
       });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$stage photo added'),
+          duration: const Duration(milliseconds: 700),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Photo capture failed: $error'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isCapturing = false;
+        });
+      }
     }
   }
-}
+
   Future<void> deletePhotoFile(String? imagePath) async {
     if (imagePath == null || imagePath.isEmpty) return;
 
@@ -166,13 +166,13 @@ Future<void> capturePhoto(String stage) async {
       context,
       MaterialPageRoute(
         builder: (_) => ReviewSendScreen(
-  workOrderNumber: widget.workOrderNumber,
-  assetId: widget.assetId,
-  photos: capturedPhotos,
-  editMode: widget.editMode,
-  existingLocalOrderId: widget.existingLocalOrderId,
-  existingServerWorkOrderId: widget.existingServerWorkOrderId,
-  existingStatus: widget.existingStatus,
+          workOrderNumber: widget.workOrderNumber,
+          assetId: widget.assetId,
+          photos: capturedPhotos,
+          editMode: widget.editMode,
+          existingLocalOrderId: widget.existingLocalOrderId,
+          existingServerWorkOrderId: widget.existingServerWorkOrderId,
+          existingStatus: widget.existingStatus,
         ),
       ),
     );
@@ -238,9 +238,7 @@ Future<void> capturePhoto(String stage) async {
               ),
             ),
           ),
-
           const Spacer(),
-
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
             decoration: BoxDecoration(
@@ -264,9 +262,7 @@ Future<void> capturePhoto(String stage) async {
               ),
             ),
           ),
-
           const Spacer(),
-
           InkWell(
             borderRadius: BorderRadius.circular(100),
             onTap: () {
@@ -342,7 +338,6 @@ Future<void> capturePhoto(String stage) async {
             color: Colors.white,
             iconSize: 34,
           ),
-
           Expanded(
             child: Container(
               height: 72,
@@ -430,7 +425,6 @@ Future<void> capturePhoto(String stage) async {
               ),
             ),
           ),
-
           IconButton(
             onPressed: stages.length <= 1 ? null : nextStage,
             icon: const Icon(Icons.chevron_right),
@@ -710,25 +704,15 @@ Future<void> capturePhoto(String stage) async {
         child: Column(
           children: [
             const Spacer(flex: 1),
-
             buildStageSelector(),
-
             const Spacer(flex: 2),
-
             buildInstructionBox(),
-
             const SizedBox(height: 28),
-
             buildDots(),
-
             const Spacer(flex: 2),
-
             buildShutterButton(),
-
             const SizedBox(height: 22),
-
             buildCapturedPhotosStrip(),
-
             buildReviewButton(),
           ],
         ),

@@ -28,8 +28,11 @@ class ImageTagService {
     });
 
     final estimatedTextWidth = (longestLineLength * fontHeight * 0.60).round();
-    final boxWidth = math.min(decodedImage.width - 24, estimatedTextWidth + (padding * 2));
-    final boxHeight = (tagLines.length * fontHeight) + ((tagLines.length - 1) * gap) + (padding * 2);
+    final boxWidth =
+        math.min(decodedImage.width - 24, estimatedTextWidth + (padding * 2));
+    final boxHeight = (tagLines.length * fontHeight) +
+        ((tagLines.length - 1) * gap) +
+        (padding * 2);
 
     final offset = _calculatePosition(
       imageWidth: decodedImage.width,
@@ -63,7 +66,8 @@ class ImageTagService {
     }
 
     final appDir = await getApplicationDocumentsDirectory();
-    final outputPath = '${appDir.path}/${filePrefix}_${DateTime.now().millisecondsSinceEpoch}_tagged.jpg';
+    final outputPath =
+        '${appDir.path}/${filePrefix}_${DateTime.now().millisecondsSinceEpoch}_tagged.jpg';
     final outputBytes = img.encodeJpg(decodedImage, quality: 88);
     await File(outputPath).writeAsBytes(outputBytes, flush: true);
 
@@ -123,7 +127,8 @@ class ImageTagService {
         return _Offset(margin, imageHeight - boxHeight - margin);
       case 'bottomRight':
       default:
-        return _Offset(imageWidth - boxWidth - margin, imageHeight - boxHeight - margin);
+        return _Offset(
+            imageWidth - boxWidth - margin, imageHeight - boxHeight - margin);
     }
   }
 }

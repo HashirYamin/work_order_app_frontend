@@ -76,7 +76,8 @@ class WorkOrderModel {
       submittedAtIso: json['submittedAtIso'],
       isSynced: json['isSynced'] ?? false,
       photos: photoList
-          .map((item) => CapturedPhoto.fromJson(Map<String, dynamic>.from(item)))
+          .map(
+              (item) => CapturedPhoto.fromJson(Map<String, dynamic>.from(item)))
           .toList(),
     );
   }

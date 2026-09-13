@@ -2,13 +2,13 @@ import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
-
+import '../../core/services/work_order_api_service.dart';
 import '../../core/services/local_work_order_service.dart';
 import '../../core/services/sync_service.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_text_field.dart';
 import '../settings/screens/settings_screen.dart';
-
+import 'package:flutter/services.dart';
 import 'saved_work_order_details_screen.dart';
 import 'stage_capture_screen.dart';
 import 'upload_queue_screen.dart';
@@ -25,6 +25,9 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
   final assetIdController = TextEditingController();
 
   final LocalWorkOrderService localWorkOrderService = LocalWorkOrderService();
+
+  final WorkOrderApiService workOrderApiService = WorkOrderApiService();
+
   final SyncService syncService = SyncService();
 
   StreamSubscription<List<ConnectivityResult>>? connectivitySubscription;
@@ -63,22 +66,140 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
     super.dispose();
   }
 
+  Map<String, dynamic> mapServerWorkOrder(
+    Map<String, dynamic> serverOrder,
+  ) {
+    final int serverId = int.tryParse(serverOrder['id']?.toString() ?? '') ?? 0;
+
+    final int photoCount =
+        int.tryParse(serverOrder['photo_count']?.toString() ?? '') ?? 0;
+
+    final String submittedAt =
+        serverOrder['submitted_at']?.toString().isNotEmpty == true
+            ? serverOrder['submitted_at'].toString()
+            : serverOrder['received_at']?.toString() ?? '';
+
+    return {
+      'id': 'server_$serverId',
+      'serverWorkOrderId': serverId,
+      'localId': serverOrder['local_id']?.toString() ?? '',
+      'workOrderNumber': serverOrder['work_order_number']?.toString() ?? '',
+      'assetId': serverOrder['asset_id']?.toString() ?? '',
+      'notes': serverOrder['notes']?.toString() ?? '',
+      'status': 'Uploaded',
+      'serverStatus': serverOrder['status']?.toString() ?? '',
+      'submittedAt': submittedAt,
+      'receivedAt': serverOrder['received_at']?.toString() ?? '',
+      'photoCount': photoCount,
+      'photos': <Map<String, dynamic>>[],
+      'pptStatus': serverOrder['ppt_status']?.toString() ?? 'not_generated',
+      'emailStatus': serverOrder['email_status']?.toString() ?? 'not_sent',
+      'source': 'server',
+    };
+  }
+
   Future<void> loadRecentWorkOrders() async {
-    final List<Map<String, dynamic>> orders =
-        await localWorkOrderService.getWorkOrders();
+    if (mounted) {
+      setState(() {
+        loadingOrders = true;
+      });
+    }
 
-    orders.sort((a, b) {
-      final String aDate = a['submittedAt'] ?? '';
-      final String bDate = b['submittedAt'] ?? '';
-      return bDate.compareTo(aDate);
-    });
+    try {
+      // --------------------------------------------------
+      // 1. Load work orders stored locally on this device
+      // --------------------------------------------------
 
-    if (!mounted) return;
+      final List<Map<String, dynamic>> localOrders =
+          await localWorkOrderService.getWorkOrders();
 
-    setState(() {
-      recentWorkOrders = orders;
-      loadingOrders = false;
-    });
+      // --------------------------------------------------
+      // 2. Load uploaded work orders from backend
+      // --------------------------------------------------
+
+      final Map<String, dynamic> response =
+          await workOrderApiService.getMyWorkOrders();
+
+      final List<Map<String, dynamic>> serverOrders = [];
+
+      if (response['success'] == true && response['data'] is List) {
+        final List<dynamic> rawServerOrders =
+            List<dynamic>.from(response['data']);
+
+        for (final dynamic item in rawServerOrders) {
+          if (item is Map) {
+            serverOrders.add(
+              mapServerWorkOrder(
+                Map<String, dynamic>.from(item),
+              ),
+            );
+          }
+        }
+      }
+
+      // --------------------------------------------------
+      // 3. Determine local IDs already present
+      // --------------------------------------------------
+
+      final Set<String> existingLocalIds = localOrders
+          .map((order) => order['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet();
+
+      // --------------------------------------------------
+      // 4. Merge without duplicating uploaded local orders
+      // --------------------------------------------------
+
+      final List<Map<String, dynamic>> mergedOrders = [
+        ...localOrders,
+      ];
+
+      for (final serverOrder in serverOrders) {
+        final String serverLocalId = serverOrder['localId']?.toString() ?? '';
+
+        final bool alreadyExistsLocally = serverLocalId.isNotEmpty &&
+            existingLocalIds.contains(serverLocalId);
+
+        if (!alreadyExistsLocally) {
+          mergedOrders.add(serverOrder);
+        }
+      }
+
+      // --------------------------------------------------
+      // 5. Sort newest first
+      // --------------------------------------------------
+
+      mergedOrders.sort((a, b) {
+        final String aDate = a['submittedAt']?.toString() ?? '';
+
+        final String bDate = b['submittedAt']?.toString() ?? '';
+
+        return bDate.compareTo(aDate);
+      });
+
+      if (!mounted) return;
+
+      setState(() {
+        recentWorkOrders = mergedOrders;
+        loadingOrders = false;
+      });
+    } catch (error) {
+      // Local data should still remain available if
+      // the server cannot be reached.
+      final List<Map<String, dynamic>> localOrders =
+          await localWorkOrderService.getWorkOrders();
+
+      if (!mounted) return;
+
+      setState(() {
+        recentWorkOrders = localOrders;
+        loadingOrders = false;
+      });
+
+      debugPrint(
+        'Failed to load server work orders: $error',
+      );
+    }
   }
 
   Future<void> runAutoSync() async {
@@ -168,45 +289,46 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
       runAutoSync();
     });
   }
+
   void editSavedOrder(Map<String, dynamic> order) {
-  final String workOrderNo = order['workOrderNumber']?.toString() ?? '';
-  final String assetId = order['assetId']?.toString() ?? '';
-  final String localOrderId = order['id']?.toString() ?? '';
-  final String status = order['status']?.toString() ?? 'Pending Upload';
+    final String workOrderNo = order['workOrderNumber']?.toString() ?? '';
+    final String assetId = order['assetId']?.toString() ?? '';
+    final String localOrderId = order['id']?.toString() ?? '';
+    final String status = order['status']?.toString() ?? 'Pending Upload';
 
-  final String serverWorkOrderId =
-      order['serverWorkOrderId']?.toString() ??
-      order['server_work_order_id']?.toString() ??
-      order['serverId']?.toString() ??
-      '';
+    final String serverWorkOrderId = order['serverWorkOrderId']?.toString() ??
+        order['server_work_order_id']?.toString() ??
+        order['serverId']?.toString() ??
+        '';
 
-  if (workOrderNo.isEmpty || assetId.isEmpty || localOrderId.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Cannot edit this work order. Required data is missing.'),
+    if (workOrderNo.isEmpty || assetId.isEmpty || localOrderId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Cannot edit this work order. Required data is missing.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StageCaptureScreen(
+          workOrderNumber: workOrderNo,
+          assetId: assetId,
+          progressOnly: false,
+          editMode: true,
+          existingLocalOrderId: localOrderId,
+          existingServerWorkOrderId: serverWorkOrderId,
+          existingStatus: status,
+        ),
       ),
-    );
-    return;
+    ).then((_) {
+      loadRecentWorkOrders();
+      runAutoSync();
+    });
   }
-
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => StageCaptureScreen(
-        workOrderNumber: workOrderNo,
-        assetId: assetId,
-        progressOnly: false,
-        editMode: true,
-        existingLocalOrderId: localOrderId,
-        existingServerWorkOrderId: serverWorkOrderId,
-        existingStatus: status,
-      ),
-    ),
-  ).then((_) {
-    loadRecentWorkOrders();
-    runAutoSync();
-  });
-}
 
   Color getStatusColor(String status) {
     if (status == 'Uploaded') return Colors.green;
@@ -226,319 +348,312 @@ class _WorkOrderScreenState extends State<WorkOrderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final int pendingCount = recentWorkOrders
-        .where((order) => order['status'] != 'Uploaded')
-        .length;
+    final int pendingCount =
+        recentWorkOrders.where((order) => order['status'] != 'Uploaded').length;
 
-    final int uploadedCount = recentWorkOrders
-        .where((order) => order['status'] == 'Uploaded')
-        .length;
+    final int uploadedCount =
+        recentWorkOrders.where((order) => order['status'] == 'Uploaded').length;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Work Order'),
-        actions: [
-          IconButton(
-            tooltip: 'Upload Queue',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const UploadQueueScreen(),
-                ),
-              ).then((_) {
-                loadRecentWorkOrders();
-                runAutoSync();
-              });
-            },
-            icon: const Icon(Icons.cloud_sync),
+    return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) async {
+          if (didPop) return;
+
+          await SystemNavigator.pop();
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Work Order'),
+            actions: [
+              IconButton(
+                tooltip: 'Upload Queue',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const UploadQueueScreen(),
+                    ),
+                  ).then((_) {
+                    loadRecentWorkOrders();
+                    runAutoSync();
+                  });
+                },
+                icon: const Icon(Icons.cloud_sync),
+              ),
+              IconButton(
+                tooltip: 'Settings',
+                onPressed: () {
+                  Navigator.pushNamed(context, SettingsScreen.routeName);
+                },
+                icon: const Icon(Icons.settings),
+              ),
+            ],
           ),
-          IconButton(
-            tooltip: 'Settings',
-            onPressed: () {
-              Navigator.pushNamed(context, SettingsScreen.routeName);
-            },
-            icon: const Icon(Icons.settings),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async {
-            await loadRecentWorkOrders();
-            await runAutoSync();
-          },
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(22),
-            child: Column(
-              children: [
-                Container(
-                  height: 76,
-                  width: 76,
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                  child: const Icon(
-                    Icons.work_outline,
-                    size: 40,
-                    color: Colors.blue,
-                  ),
-                ),
-
-                const SizedBox(height: 18),
-
-                const Text(
-                  'Enter WO number or continue',
-                  style: TextStyle(color: Colors.grey),
-                ),
-
-                const SizedBox(height: 20),
-
-                AppTextField(
-                  label: 'Work Order Number',
-                  controller: workOrderController,
-                  prefixIcon: Icons.assignment,
-                ),
-
-                const SizedBox(height: 12),
-
-                AppTextField(
-                  label: 'Asset ID',
-                  controller: assetIdController,
-                  prefixIcon: Icons.confirmation_number,
-                ),
-
-                const SizedBox(height: 8),
-
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Progress photos only'),
-                  subtitle: const Text(
-                    'Use when Before / During / After stages are not required',
-                  ),
-                  value: progressOnly,
-                  onChanged: (value) {
-                    setState(() {
-                      progressOnly = value;
-                    });
-                  },
-                ),
-
-                const SizedBox(height: 12),
-
-                AppButton(
-                  title: 'Continue',
-                  onTap: continueToStages,
-                ),
-
-                const SizedBox(height: 12),
-
-                OutlinedButton(
-                  onPressed: continueWithoutWorkOrder,
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 52),
-                  ),
-                  child: const Text('Continue Without Work Order'),
-                ),
-
-                if (autoSyncMessage.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: autoSyncing
-                          ? Colors.blue.shade50
-                          : Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: autoSyncing
-                            ? Colors.blue.shade200
-                            : Colors.green.shade200,
+          body: SafeArea(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                await loadRecentWorkOrders();
+                await runAutoSync();
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(22),
+                child: Column(
+                  children: [
+                    Container(
+                      height: 76,
+                      width: 76,
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: const Icon(
+                        Icons.work_outline,
+                        size: 40,
+                        color: Colors.blue,
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        if (autoSyncing)
-                          const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        else
-                          const Icon(
-                            Icons.check_circle,
-                            color: Colors.green,
+                    const SizedBox(height: 18),
+                    const Text(
+                      'Enter WO number or continue',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 20),
+                    AppTextField(
+                      label: 'Work Order Number',
+                      controller: workOrderController,
+                      prefixIcon: Icons.assignment,
+                    ),
+                    const SizedBox(height: 12),
+                    AppTextField(
+                      label: 'Asset ID',
+                      controller: assetIdController,
+                      prefixIcon: Icons.confirmation_number,
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Progress photos only'),
+                      subtitle: const Text(
+                        'Use when Before / During / After stages are not required',
+                      ),
+                      value: progressOnly,
+                      onChanged: (value) {
+                        setState(() {
+                          progressOnly = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    AppButton(
+                      title: 'Continue',
+                      onTap: continueToStages,
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: continueWithoutWorkOrder,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 52),
+                      ),
+                      child: const Text('Continue Without Work Order'),
+                    ),
+                    if (autoSyncMessage.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: autoSyncing
+                              ? Colors.blue.shade50
+                              : Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: autoSyncing
+                                ? Colors.blue.shade200
+                                : Colors.green.shade200,
                           ),
-                        const SizedBox(width: 10),
+                        ),
+                        child: Row(
+                          children: [
+                            if (autoSyncing)
+                              const SizedBox(
+                                height: 18,
+                                width: 18,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            else
+                              const Icon(
+                                Icons.check_circle,
+                                color: Colors.green,
+                              ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                autoSyncMessage,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 28),
+                    Row(
+                      children: [
                         Expanded(
-                          child: Text(
-                            autoSyncMessage,
-                            style: const TextStyle(fontSize: 13),
+                          child: _DashboardCard(
+                            title: 'Pending',
+                            value: '$pendingCount',
+                            icon: Icons.cloud_upload,
+                            color: Colors.orange,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _DashboardCard(
+                            title: 'Uploaded',
+                            value: '$uploadedCount',
+                            icon: Icons.cloud_done,
+                            color: Colors.green,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
-
-                const SizedBox(height: 28),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: _DashboardCard(
-                        title: 'Pending',
-                        value: '$pendingCount',
-                        icon: Icons.cloud_upload,
-                        color: Colors.orange,
+                    const SizedBox(height: 24),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'My Recent Work Orders',
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _DashboardCard(
-                        title: 'Uploaded',
-                        value: '$uploadedCount',
-                        icon: Icons.cloud_done,
-                        color: Colors.green,
+                    const SizedBox(height: 12),
+                    if (loadingOrders)
+                      const Padding(
+                        padding: EdgeInsets.all(20),
+                        child: CircularProgressIndicator(),
+                      )
+                    else if (recentWorkOrders.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: const Text(
+                          'No local work orders yet. Submitted work orders will appear here.',
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    else
+                      ListView.separated(
+                        itemCount: recentWorkOrders.length,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final Map<String, dynamic> order =
+                              recentWorkOrders[index];
+
+                          final String workOrderNo =
+                              order['workOrderNumber'] ?? 'Unknown WO';
+                          final String assetId = order['assetId'] ?? 'N/A';
+                          final String status =
+                              order['status'] ?? 'Pending Upload';
+
+                          final int photoCount = order['source'] == 'server'
+                              ? int.tryParse(
+                                    order['photoCount']?.toString() ?? '0',
+                                  ) ??
+                                  0
+                              : localWorkOrderService.getPhotoCount(order);
+
+                          return InkWell(
+                            onTap: () => openSavedOrder(order),
+                            borderRadius: BorderRadius.circular(14),
+                            child: Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: Colors.grey.shade200),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    getStatusIcon(status),
+                                    color: getStatusColor(status),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          workOrderNo,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Asset: $assetId • $photoCount photos',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          status,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: getStatusColor(status),
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Column(
+                                    children: [
+                                      IconButton(
+                                        tooltip: 'Open',
+                                        onPressed: () => openSavedOrder(order),
+                                        icon: const Icon(Icons.chevron_right),
+                                      ),
+                                      TextButton.icon(
+                                        onPressed: () => editSavedOrder(order),
+                                        icon: const Icon(
+                                          Icons.add_a_photo,
+                                          size: 16,
+                                        ),
+                                        label: const Text(
+                                          'Edit',
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    ),
                   ],
                 ),
-
-                const SizedBox(height: 24),
-
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'My Recent Work Orders',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                if (loadingOrders)
-                  const Padding(
-                    padding: EdgeInsets.all(20),
-                    child: CircularProgressIndicator(),
-                  )
-                else if (recentWorkOrders.isEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: const Text(
-                      'No local work orders yet. Submitted work orders will appear here.',
-                      textAlign: TextAlign.center,
-                    ),
-                  )
-                else
-                  ListView.separated(
-                    itemCount: recentWorkOrders.length,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final Map<String, dynamic> order =
-                          recentWorkOrders[index];
-
-                      final String workOrderNo =
-                          order['workOrderNumber'] ?? 'Unknown WO';
-                      final String assetId = order['assetId'] ?? 'N/A';
-                      final String status =
-                          order['status'] ?? 'Pending Upload';
-
-                      final int photoCount =
-                          localWorkOrderService.getPhotoCount(order);
-
-                      return InkWell(
-                        onTap: () => openSavedOrder(order),
-                        borderRadius: BorderRadius.circular(14),
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.grey.shade200),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                getStatusIcon(status),
-                                color: getStatusColor(status),
-                              ),
-
-                              const SizedBox(width: 12),
-
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      workOrderNo,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Asset: $assetId • $photoCount photos',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      status,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: getStatusColor(status),
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-
-                              Column(
-  children: [
-    IconButton(
-      tooltip: 'Open',
-      onPressed: () => openSavedOrder(order),
-      icon: const Icon(Icons.chevron_right),
-    ),
-    TextButton.icon(
-      onPressed: () => editSavedOrder(order),
-      icon: const Icon(Icons.add_a_photo, size: 16),
-      label: const Text(
-        'Edit',
-        style: TextStyle(fontSize: 12),
-      ),
-    ),
-  ],
-),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
-    );
+        ));
   }
 }
 

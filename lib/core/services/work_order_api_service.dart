@@ -56,6 +56,142 @@ class WorkOrderApiService {
     );
   }
 
+  Future<Map<String, dynamic>> getMyWorkOrders() async {
+    if (ApiConfig.useFakeApi) {
+      return {
+        'success': true,
+        'data': <Map<String, dynamic>>[],
+      };
+    }
+
+    try {
+      final String? token = await userSessionService.getToken();
+
+      if (token == null || token.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Authentication token is missing',
+          'data': <Map<String, dynamic>>[],
+        };
+      }
+
+      final response = await http.get(
+        Uri.parse(ApiConfig.myWorkOrders),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.body.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Server returned an empty response',
+          'statusCode': response.statusCode,
+          'data': <Map<String, dynamic>>[],
+        };
+      }
+
+      final dynamic decoded = jsonDecode(response.body);
+
+      if (decoded is! Map<String, dynamic>) {
+        return {
+          'success': false,
+          'message': 'Invalid server response',
+          'data': <Map<String, dynamic>>[],
+        };
+      }
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return {
+          'success': false,
+          'message': decoded['message'] ?? 'Failed to load work orders',
+          'statusCode': response.statusCode,
+          'data': <Map<String, dynamic>>[],
+        };
+      }
+
+      return {
+        'success': decoded['success'] == true,
+        'data': decoded['data'] ?? <dynamic>[],
+      };
+    } catch (error) {
+      return {
+        'success': false,
+        'message': 'Failed to load work orders: $error',
+        'data': <Map<String, dynamic>>[],
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> getWorkOrderDetails({
+    required int workOrderId,
+  }) async {
+    if (ApiConfig.useFakeApi) {
+      return {
+        'success': false,
+        'message': 'Work order details are unavailable in fake API mode',
+      };
+    }
+
+    try {
+      final String? token = await userSessionService.getToken();
+
+      if (token == null || token.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Authentication token is missing',
+        };
+      }
+
+      final Uri uri = Uri.parse(
+        '${ApiConfig.baseUrl}/work-orders/$workOrderId',
+      );
+
+      final http.Response response = await http.get(
+        uri,
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.body.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Server returned an empty response',
+          'statusCode': response.statusCode,
+        };
+      }
+
+      final dynamic decoded = jsonDecode(response.body);
+
+      if (decoded is! Map) {
+        return {
+          'success': false,
+          'message': 'Invalid server response',
+        };
+      }
+
+      final Map<String, dynamic> result = Map<String, dynamic>.from(decoded);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return {
+          'success': false,
+          'message': result['message'] ?? 'Failed to load work order details',
+          'statusCode': response.statusCode,
+        };
+      }
+
+      return result;
+    } catch (error) {
+      return {
+        'success': false,
+        'message': 'Failed to load work order details: $error',
+      };
+    }
+  }
+
   Future<Map<String, dynamic>> _sendMultipartWorkOrderRequest({
     required String endpoint,
     required Map<String, dynamic> workOrder,
@@ -107,10 +243,8 @@ class WorkOrderApiService {
           ),
         );
 
-        request.fields['photo_${i}_stage'] =
-            photo['stage']?.toString() ?? '';
-        request.fields['photo_${i}_time'] =
-            photo['time']?.toString() ?? '';
+        request.fields['photo_${i}_stage'] = photo['stage']?.toString() ?? '';
+        request.fields['photo_${i}_time'] = photo['time']?.toString() ?? '';
         request.fields['photo_${i}_displayTime'] =
             photo['displayTime']?.toString() ?? '';
         request.fields['photo_${i}_latitude'] =

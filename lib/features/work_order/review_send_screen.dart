@@ -41,57 +41,57 @@ class _ReviewSendScreenState extends State<ReviewSendScreen> {
   final WorkOrderApiService workOrderApiService = WorkOrderApiService();
 
   bool submitting = false;
-String buildWhatsAppMessage() {
-  final String remarks = notesController.text.trim().isEmpty
-      ? '-'
-      : notesController.text.trim();
+  String buildWhatsAppMessage() {
+    final String remarks =
+        notesController.text.trim().isEmpty ? '-' : notesController.text.trim();
 
-  return '''
+    return '''
 *Work Order Report*
 
 Asset ID: ${widget.assetId}
 Work Order Number: ${widget.workOrderNumber}
 Remarks: $remarks
 ''';
-}
+  }
 
-Future<void> shareWorkOrderToWhatsApp() async {
-  try {
-    final String message = buildWhatsAppMessage();
+  Future<void> shareWorkOrderToWhatsApp() async {
+    try {
+      final String message = buildWhatsAppMessage();
 
-    final List<XFile> files = widget.photos
-        .map((photo) => photo['imagePath'] ?? '')
-        .where((path) => path.isNotEmpty && File(path).existsSync())
-        .map((path) => XFile(path))
-        .toList();
+      final List<XFile> files = widget.photos
+          .map((photo) => photo['imagePath'] ?? '')
+          .where((path) => path.isNotEmpty && File(path).existsSync())
+          .map((path) => XFile(path))
+          .toList();
 
-    if (files.isEmpty) {
+      if (files.isEmpty) {
+        await SharePlus.instance.share(
+          ShareParams(
+            text: message,
+            subject: 'Work Order ${widget.workOrderNumber}',
+          ),
+        );
+        return;
+      }
+
       await SharePlus.instance.share(
         ShareParams(
+          files: files,
           text: message,
           subject: 'Work Order ${widget.workOrderNumber}',
         ),
       );
-      return;
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to share work order: $error'),
+        ),
+      );
     }
-
-    await SharePlus.instance.share(
-      ShareParams(
-        files: files,
-        text: message,
-        subject: 'Work Order ${widget.workOrderNumber}',
-      ),
-    );
-  } catch (error) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Unable to share work order: $error'),
-      ),
-    );
   }
-}
+
   @override
   void dispose() {
     notesController.dispose();
@@ -263,7 +263,6 @@ Future<void> shareWorkOrderToWhatsApp() async {
                     style: TextStyle(fontSize: 13),
                   ),
                 ),
-
               Wrap(
                 spacing: 10,
                 runSpacing: 10,
@@ -290,29 +289,21 @@ Future<void> shareWorkOrderToWhatsApp() async {
                   );
                 }).toList(),
               ),
-
               const SizedBox(height: 20),
-
               Text(
                 'Work Order: ${widget.workOrderNumber}',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-
               const SizedBox(height: 6),
-
               Text('Asset ID: ${widget.assetId}'),
-
               const SizedBox(height: 18),
-
               AppTextField(
                 label: 'Notes Optional',
                 controller: notesController,
                 maxLines: 3,
                 prefixIcon: Icons.note,
               ),
-
               const SizedBox(height: 20),
-
               Text(
                 widget.editMode
                     ? 'New Photos to Add'
@@ -322,9 +313,7 @@ Future<void> shareWorkOrderToWhatsApp() async {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-
               const SizedBox(height: 12),
-
               GridView.builder(
                 itemCount: widget.photos.length,
                 shrinkWrap: true,
@@ -382,7 +371,6 @@ Future<void> shareWorkOrderToWhatsApp() async {
                               ),
                             ),
                           ),
-
                           Padding(
                             padding: const EdgeInsets.all(8),
                             child: Column(
@@ -432,35 +420,29 @@ Future<void> shareWorkOrderToWhatsApp() async {
                   );
                 },
               ),
-
               const SizedBox(height: 24),
-
-OutlinedButton.icon(
-  onPressed: submitting ? null : shareWorkOrderToWhatsApp,
-  icon: const Icon(Icons.share),
-  label: const Text('Send to WhatsApp Chat / Group'),
-  style: OutlinedButton.styleFrom(
-    foregroundColor: Colors.green,
-    side: const BorderSide(color: Colors.green),
-    minimumSize: const Size(double.infinity, 52),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(14),
-    ),
-  ),
-),
-
-const SizedBox(height: 12),
-
-AppButton(
-  title: widget.editMode
-      ? 'Add Photos to Work Order'
-      : 'Save Locally / Submit for Upload',
-  loading: submitting,
-  onTap: submit,
-),
-
+              OutlinedButton.icon(
+                onPressed: submitting ? null : shareWorkOrderToWhatsApp,
+                icon: const Icon(Icons.share),
+                label: const Text('Send to WhatsApp Chat / Group'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.green,
+                  side: const BorderSide(color: Colors.green),
+                  minimumSize: const Size(double.infinity, 52),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              AppButton(
+                title: widget.editMode
+                    ? 'Add Photos to Work Order'
+                    : 'Save Locally / Submit for Upload',
+                loading: submitting,
+                onTap: submit,
+              ),
               const SizedBox(height: 8),
-
               Center(
                 child: Text(
                   widget.editMode

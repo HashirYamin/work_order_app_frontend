@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/services/auth_api_service.dart';
+import '../../core/services/firebase_phone_auth_service.dart';
 import '../../shared/widgets/app_button.dart';
+import '../../shared/widgets/phone_otp_dialog.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   static const routeName = '/forgot-password';
@@ -16,26 +18,29 @@ class ForgotPasswordScreen extends StatefulWidget {
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final AuthApiService authApiService = AuthApiService();
 
-  final phoneController = TextEditingController();
-  final otpController = TextEditingController();
-  final newPasswordController = TextEditingController();
-  final confirmPasswordController = TextEditingController();
+  final FirebasePhoneAuthService phoneAuthService = FirebasePhoneAuthService();
+
+  final TextEditingController phoneController = TextEditingController();
+
+  final TextEditingController newPasswordController = TextEditingController();
+
+  final TextEditingController confirmPasswordController =
+      TextEditingController();
 
   bool loading = false;
-  bool otpSent = false;
   bool obscureNewPassword = true;
   bool obscureConfirmPassword = true;
-
-  String message = '';
-  String testingOtp = '';
 
   @override
   void dispose() {
     phoneController.dispose();
-    otpController.dispose();
     newPasswordController.dispose();
     confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  bool isValidQatarPhone(String phone) {
+    return RegExp(r'^[3567]\d{7}$').hasMatch(phone.trim());
   }
 
   String? validatePassword(String password) {
@@ -55,82 +60,40 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       return 'Password must contain one number';
     }
 
-    if (!RegExp(r'[!@#$%^&*(),.?":{}|<>_\-+=]').hasMatch(password)) {
+    if (!RegExp(
+      r'[!@#$%^&*(),.?":{}|<>_\-+=]',
+    ).hasMatch(password)) {
       return 'Password must contain one special character';
     }
 
     return null;
   }
 
-  Future<void> sendOtp() async {
-    final String phone = phoneController.text.trim();
-
-    if (!RegExp(r'^\d{8}$').hasMatch(phone)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid 8-digit Qatar phone number.'),
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      loading = true;
-      message = '';
-      testingOtp = '';
-    });
-
-    try {
-      final Map<String, dynamic> response =
-          await authApiService.forgotPassword(phone: phone);
-
-      final bool success = response['success'] == true;
-
-      if (!success) {
-        throw Exception(response['message'] ?? 'Failed to generate OTP');
-      }
-
-      if (!mounted) return;
-
-      setState(() {
-        otpSent = true;
-        message = response['message']?.toString() ??
-            'OTP generated successfully. Please enter the OTP below.';
-        testingOtp = response['devOtp']?.toString() ?? '';
-      });
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString().replaceAll('Exception: ', ''))),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          loading = false;
-        });
-      }
-    }
-  }
-
   Future<void> resetPassword() async {
     final String phone = phoneController.text.trim();
-    final String otp = otpController.text.trim();
+
     final String newPassword = newPasswordController.text.trim();
+
     final String confirmPassword = confirmPasswordController.text.trim();
 
-    if (!RegExp(r'^\d{8}$').hasMatch(phone)) {
+    if (!isValidQatarPhone(phone)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter a valid 8-digit Qatar phone number.'),
+          content: Text(
+            'Enter a valid 8-digit Qatar mobile number',
+          ),
         ),
       );
       return;
     }
 
-    if (otp.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty) {
+    if (newPassword.isEmpty || confirmPassword.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill OTP and password fields')),
+        const SnackBar(
+          content: Text(
+            'Enter and confirm your new password',
+          ),
+        ),
       );
       return;
     }
@@ -146,7 +109,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     if (newPassword != confirmPassword) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password and confirm password must match')),
+        const SnackBar(
+          content: Text(
+            'Password and confirm password must match',
+          ),
+        ),
       );
       return;
     }
@@ -156,35 +123,48 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     });
 
     try {
-      final Map<String, dynamic> response =
-          await authApiService.resetPassword(
+      final String? firebaseIdToken = await showPhoneOtpDialog(
+        context: context,
         phone: phone,
-        otp: otp,
+        phoneAuthService: phoneAuthService,
+      );
+
+      if (firebaseIdToken == null) {
+        return;
+      }
+
+      final Map<String, dynamic> response =
+          await authApiService.resetPasswordWithPhone(
+        firebaseIdToken: firebaseIdToken,
         newPassword: newPassword,
       );
 
       final bool success = response['success'] == true;
 
       if (!success) {
-        throw Exception(response['message'] ?? 'Password reset failed');
+        throw Exception(
+          response['message'] ?? 'Password reset failed',
+        );
       }
 
       if (!mounted) return;
 
-      showDialog(
+      await showDialog<void>(
         context: context,
         barrierDismissible: false,
-        builder: (context) {
+        builder: (BuildContext dialogContext) {
           return AlertDialog(
-            title: const Text('Password Reset Successful'),
-            content: const Text(
-              'Your password has been reset successfully. Please login with your new password.',
+            title: const Text(
+              'Password Reset Successful',
+            ),
+            content: Text(
+              response['message']?.toString() ??
+                  'Your password has been reset. Please login with your new password.',
             ),
             actions: [
               TextButton(
                 onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.pop(context);
+                  Navigator.of(dialogContext).pop();
                 },
                 child: const Text('OK'),
               ),
@@ -192,13 +172,23 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           );
         },
       );
+
+      if (!mounted) return;
+
+      Navigator.of(context).pop();
     } catch (error) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString().replaceAll('Exception: ', ''))),
+        SnackBar(
+          content: Text(
+            error.toString().replaceFirst('Exception: ', ''),
+          ),
+        ),
       );
     } finally {
+      await phoneAuthService.signOut();
+
       if (mounted) {
         setState(() {
           loading = false;
@@ -210,35 +200,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Widget qatarPhoneField() {
     return TextField(
       controller: phoneController,
-      enabled: !otpSent && !loading,
+      enabled: !loading,
       keyboardType: TextInputType.number,
       inputFormatters: [
         FilteringTextInputFormatter.digitsOnly,
         LengthLimitingTextInputFormatter(8),
       ],
       decoration: InputDecoration(
-        labelText: 'Phone Number',
-        hintText: '8-digit Qatar number',
+        labelText: 'Registered Phone Number',
+        hintText: '8-digit Qatar mobile number',
         prefixIcon: const Icon(Icons.phone),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-    );
-  }
-
-  Widget otpField() {
-    return TextField(
-      controller: otpController,
-      keyboardType: TextInputType.number,
-      inputFormatters: [
-        FilteringTextInputFormatter.digitsOnly,
-        LengthLimitingTextInputFormatter(6),
-      ],
-      decoration: InputDecoration(
-        labelText: 'OTP',
-        hintText: 'Enter OTP',
-        prefixIcon: const Icon(Icons.password),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -249,19 +220,22 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Widget newPasswordField() {
     return TextField(
       controller: newPasswordController,
+      enabled: !loading,
       obscureText: obscureNewPassword,
       decoration: InputDecoration(
         labelText: 'New Password',
         prefixIcon: const Icon(Icons.lock),
         suffixIcon: IconButton(
+          onPressed: loading
+              ? null
+              : () {
+                  setState(() {
+                    obscureNewPassword = !obscureNewPassword;
+                  });
+                },
           icon: Icon(
             obscureNewPassword ? Icons.visibility_off : Icons.visibility,
           ),
-          onPressed: () {
-            setState(() {
-              obscureNewPassword = !obscureNewPassword;
-            });
-          },
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -273,19 +247,22 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Widget confirmPasswordField() {
     return TextField(
       controller: confirmPasswordController,
+      enabled: !loading,
       obscureText: obscureConfirmPassword,
       decoration: InputDecoration(
-        labelText: 'Confirm Password',
+        labelText: 'Confirm New Password',
         prefixIcon: const Icon(Icons.lock_outline),
         suffixIcon: IconButton(
+          onPressed: loading
+              ? null
+              : () {
+                  setState(() {
+                    obscureConfirmPassword = !obscureConfirmPassword;
+                  });
+                },
           icon: Icon(
             obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
           ),
-          onPressed: () {
-            setState(() {
-              obscureConfirmPassword = !obscureConfirmPassword;
-            });
-          },
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -294,162 +271,48 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 
-  Widget testingOtpBox() {
-    if (testingOtp.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.blue.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Testing OTP',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            testingOtp,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'For this demo version, OTP is shown on screen. In production, OTP can be sent by SMS.',
-            style: TextStyle(fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget messageBox() {
-    if (message.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.green.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.green.shade200),
-      ),
-      child: Text(
-        message,
-        style: const TextStyle(fontSize: 13),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Forgot Password'),
+        title: const Text('Reset Password'),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(22),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Reset Password',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
+              const Icon(
+                Icons.lock_reset,
+                size: 72,
               ),
-
-              const SizedBox(height: 8),
-
-              const Text(
-                'Enter your registered 8-digit Qatar phone number. For this demo version, the OTP will be shown on screen for testing. In production, OTP can be sent by SMS.',
-                style: TextStyle(color: Colors.grey),
-              ),
-
-              const SizedBox(height: 22),
-
-              qatarPhoneField(),
-
               const SizedBox(height: 14),
-
-              if (!otpSent)
-                AppButton(
-                  title: 'Send OTP',
-                  loading: loading,
-                  onTap: sendOtp,
+              const Text(
+                'Verify your registered phone number to set a new password.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 24),
+              qatarPhoneField(),
+              const SizedBox(height: 14),
+              newPasswordField(),
+              const SizedBox(height: 14),
+              confirmPasswordField(),
+              const SizedBox(height: 12),
+              const Text(
+                'Password must contain uppercase lowercase number special character and at least 8 characters.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
                 ),
-
-              if (otpSent) ...[
-                messageBox(),
-
-                const SizedBox(height: 12),
-
-                testingOtpBox(),
-
-                const SizedBox(height: 14),
-
-                otpField(),
-
-                const SizedBox(height: 14),
-
-                newPasswordField(),
-
-                const SizedBox(height: 14),
-
-                confirmPasswordField(),
-
-                const SizedBox(height: 12),
-
-                const Text(
-                  'Password must contain uppercase, lowercase, number, special character and minimum 8 characters.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-
-                const SizedBox(height: 22),
-
-                AppButton(
-                  title: 'Reset Password',
-                  loading: loading,
-                  onTap: resetPassword,
-                ),
-
-                const SizedBox(height: 12),
-
-                Center(
-                  child: TextButton(
-                    onPressed: loading
-                        ? null
-                        : () {
-                            setState(() {
-                              otpSent = false;
-                              message = '';
-                              testingOtp = '';
-                              otpController.clear();
-                              newPasswordController.clear();
-                              confirmPasswordController.clear();
-                            });
-                          },
-                    child: const Text('Change phone number'),
-                  ),
-                ),
-              ],
+              ),
+              const SizedBox(height: 24),
+              AppButton(
+                title: 'Verify Phone & Reset Password',
+                loading: loading,
+                onTap: resetPassword,
+              ),
             ],
           ),
         ),

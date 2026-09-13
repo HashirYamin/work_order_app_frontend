@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "357877396773",
+    "project_id": "workorder-flow-ca50e",
+    "storage_bucket": "workorder-flow-ca50e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:357877396773:android:3c2cdc658312db964a96cc",
+        "android_client_info": {
+          "package_name": "com.shahidimran.workorder"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBFqVe5s45iueOdXXSyEeFe2OZp1HH3_dk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

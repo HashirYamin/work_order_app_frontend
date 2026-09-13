@@ -162,4 +162,71 @@ class AuthApiService {
 
     return jsonDecode(response.body);
   }
+
+  Future<Map<String, dynamic>> registerWithPhone({
+    required String fullName,
+    required String qidNumber,
+    required String jobTitle,
+    required String phone,
+    required String password,
+    required String firebaseIdToken,
+  }) async {
+    final http.Response response = await http.post(
+      Uri.parse(ApiConfig.registerWithPhone),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'fullName': fullName,
+        'qidNumber': qidNumber,
+        'jobTitle': jobTitle,
+        'phone': phone,
+        'password': password,
+        'firebaseIdToken': firebaseIdToken,
+      }),
+    );
+
+    return _decodeResponse(response);
+  }
+
+  Future<Map<String, dynamic>> resetPasswordWithPhone({
+    required String firebaseIdToken,
+    required String newPassword,
+  }) async {
+    final http.Response response = await http.post(
+      Uri.parse(ApiConfig.resetPasswordWithPhone),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'firebaseIdToken': firebaseIdToken,
+        'newPassword': newPassword,
+      }),
+    );
+
+    return _decodeResponse(response);
+  }
+
+  Map<String, dynamic> _decodeResponse(
+    http.Response response,
+  ) {
+    try {
+      final dynamic decoded = jsonDecode(response.body);
+
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+    } catch (_) {
+      // A readable fallback is returned below.
+    }
+
+    return {
+      'success': false,
+      'message': 'Unexpected server response (${response.statusCode})',
+    };
+  }
 }
