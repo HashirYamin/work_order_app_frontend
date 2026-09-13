@@ -3,39 +3,34 @@ name: Flutter CI
 on:
   push:
     branches:
+      - main
       - release/play-store-v
 
   pull_request:
     branches:
-      - release/play-store-v
+      - main
 
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: flutter-ci-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   validate:
-    name: Analyze & Build
     runs-on: ubuntu-latest
-    timeout-minutes: 25
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Set up Java 21
+      - name: Java 21
         uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
           cache: gradle
 
-      - name: Set up Flutter
+      - name: Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.44.8"
@@ -43,23 +38,19 @@ jobs:
           cache: true
           pub-cache: true
 
-      - name: Show environment
-        run: |
-          flutter --version
-          java -version
-
-      - name: Install dependencies
+      - name: Dependencies
         run: flutter pub get
-            - name: Analyze code
+
+      - name: Analyze
         run: flutter analyze --no-fatal-infos
 
-      - name: Run tests if available
+      - name: Tests
         shell: bash
         run: |
           if [ -d "test" ] && find test -name "*_test.dart" | grep -q .; then
             flutter test
           else
-            echo "No Flutter tests found. Skipping flutter test."
+            echo "No tests found."
           fi
 
       - name: Build debug APK
